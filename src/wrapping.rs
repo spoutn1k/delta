@@ -1,12 +1,8 @@
-use syntect::highlighting::Style as SyntectStyle;
-use unicode_segmentation::UnicodeSegmentation;
-use unicode_width::UnicodeWidthStr;
-
-use crate::{cli, config::INLINE_SYMBOL_WIDTH_1, fatal};
-
 use crate::{
-    config::Config,
+    cli,
+    config::{Config, INLINE_SYMBOL_WIDTH_1},
     delta::{DiffType, State},
+    errors::{Error, Result},
     features::{
         line_numbers::{self, SideBySideLineWidth},
         side_by_side::{Left, Right, available_line_width, line_is_too_long},
@@ -16,6 +12,9 @@ use crate::{
     style::Style,
     utils::syntect::FromDeltaStyle,
 };
+use syntect::highlighting::Style as SyntectStyle;
+use unicode_segmentation::UnicodeSegmentation;
+use unicode_width::UnicodeWidthStr;
 
 /// See [`wrap_line`] for documentation.
 #[derive(Clone, Debug)]
@@ -33,36 +32,31 @@ pub struct WrapConfig {
 }
 
 impl WrapConfig {
-    pub fn from_opt(opt: &cli::Opt, inline_hint_style: Style) -> Self {
-        Self {
-            left_symbol: ensure_display_width_1("wrap-left-symbol", opt.wrap_left_symbol.clone()),
+    pub fn from_opt(opt: &cli::Opt, inline_hint_style: Style) -> Result<Self> {
+        Ok(Self {
+            left_symbol: ensure_display_width_1("wrap-left-symbol", opt.wrap_left_symbol.clone())?,
             right_symbol: ensure_display_width_1(
                 "wrap-right-symbol",
                 opt.wrap_right_symbol.clone(),
-            ),
+            )?,
             right_prefix_symbol: ensure_display_width_1(
                 "wrap-right-prefix-symbol",
                 opt.wrap_right_prefix_symbol.clone(),
-            ),
+            )?,
             use_wrap_right_permille: {
                 let arg = &opt.wrap_right_percent;
                 let percent = remove_percent_suffix(arg)
                     .parse::<f64>()
-                    .unwrap_or_else(|err| {
-                        fatal(format!(
-                            "Could not parse wrap-right-percent argument {}: {}.",
-                            &arg, err
-                        ))
-                    });
+                    .map_err(Error::WrapRightPercentParse)?;
                 if percent.is_finite() && percent > 0.0 && percent < 100.0 {
                     (percent * 10.0).round() as usize
                 } else {
-                    fatal("Invalid value for wrap-right-percent, not between 0 and 100.")
+                    Err(Error::WrapRightPercentInvalidValue(percent))?
                 }
             },
-            max_lines: adapt_wrap_max_lines_argument(opt.wrap_max_lines.clone()),
+            max_lines: adapt_wrap_max_lines_argument(opt.wrap_max_lines.clone())?,
             inline_hint_syntect_style: SyntectStyle::from_delta_style(inline_hint_style),
-        }
+        })
     }
 
     // Compute value of `max_line_length` field in the main `Config` struct.
@@ -98,23 +92,26 @@ fn remove_percent_suffix(arg: &str) -> &str {
     }
 }
 
-fn ensure_display_width_1(what: &str, arg: String) -> String {
+fn ensure_display_width_1(what: &str, arg: String) -> Result<String> {
     match arg.grapheme_indices(true).count() {
-        INLINE_SYMBOL_WIDTH_1 => arg,
-        width => fatal(format!(
-            "Invalid value for {what}, display width of \"{arg}\" must be {INLINE_SYMBOL_WIDTH_1} but is {width}",
+        INLINE_SYMBOL_WIDTH_1 => Ok(arg),
+        width => Err(Error::DisplayWidthInvalidValue(
+            what.into(),
+            arg,
+            INLINE_SYMBOL_WIDTH_1,
+            width,
         )),
     }
 }
 
-fn adapt_wrap_max_lines_argument(arg: String) -> usize {
-    if arg == "∞" || arg == "unlimited" || arg.starts_with("inf") {
-        0
-    } else {
-        arg.parse::<usize>()
-            .unwrap_or_else(|err| fatal(format!("Invalid wrap-max-lines argument: {err}")))
-            + 1
-    }
+fn adapt_wrap_max_lines_argument(arg: String) -> Result<usize> {
+    Ok(
+        if arg == "∞" || arg == "unlimited" || arg.starts_with("inf") {
+            0
+        } else {
+            arg.parse::<usize>().map_err(Error::WrapMaxLinesParse)? + 1
+        },
+    )
 }
 
 #[derive(PartialEq)]

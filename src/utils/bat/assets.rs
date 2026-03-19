@@ -1,20 +1,17 @@
 // Based on code from https://github.com/sharkdp/bat a1b9334a44a2c652f52dddaa83dbacba57372468
 // See src/utils/bat/LICENSE
 
-use std::io::{self, Write};
-
-use ansi_term::Colour::Green;
-use ansi_term::Style;
+use crate::{errors::Result, utils};
+use ansi_term::{Colour::Green, Style};
 use bat;
-
-use crate::utils;
+use std::io::{self, Write};
 
 pub fn load_highlighting_assets() -> bat::assets::HighlightingAssets {
     bat::assets::HighlightingAssets::from_cache(utils::bat::dirs::PROJECT_DIRS.cache_dir())
         .unwrap_or_else(|_| bat::assets::HighlightingAssets::from_binary())
 }
 
-pub fn list_languages() -> std::io::Result<()> {
+pub fn list_languages() -> Result<()> {
     let assets = utils::bat::assets::load_highlighting_assets();
     let mut languages = assets
         .get_syntaxes()

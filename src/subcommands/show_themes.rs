@@ -1,28 +1,25 @@
-use std::io::{self, ErrorKind, IsTerminal, Read};
+use super::sample_diff::DIFF;
+use crate::{
+    cli,
+    color::ColorMode,
+    config, delta,
+    env::DeltaEnv,
+    errors::{Error, Result},
+    git_config,
+    options::get::get_themes,
+    utils::bat::output::{OutputType, PagingMode},
+};
+use bytelines::ByteLines;
+use std::{
+    convert::TryFrom as _,
+    io::{self, BufReader, ErrorKind, IsTerminal, Read},
+};
 
-use crate::cli;
-use crate::color::ColorMode;
-use crate::config;
-use crate::delta;
-use crate::env::DeltaEnv;
-use crate::git_config;
-use crate::options::get::get_themes;
-use crate::utils::bat::output::{OutputType, PagingMode};
-
-pub fn show_themes(dark: bool, light: bool, color_mode: ColorMode) -> std::io::Result<()> {
-    use std::io::BufReader;
-
-    use bytelines::ByteLines;
-
-    use super::sample_diff::DIFF;
-
+pub fn show_themes(dark: bool, light: bool, color_mode: ColorMode) -> Result<()> {
     let env = DeltaEnv::default();
     let themes = get_themes(git_config::GitConfig::try_create(&env));
     if themes.is_empty() {
-        return Err(std::io::Error::new(
-            ErrorKind::NotFound,
-            "No themes found. Please see https://dandavison.github.io/delta/custom-themes.html.",
-        ));
+        Err(Error::NoThemes)?
     }
 
     let mut input = DIFF.to_vec();
@@ -45,7 +42,7 @@ pub fn show_themes(dark: bool, light: bool, color_mode: ColorMode) -> std::io::R
         &env,
         PagingMode::Always,
         None,
-        &config::Config::from(opt).into(),
+        &config::Config::try_from(opt)?.into(),
     )
     .unwrap();
     let title_style = ansi_term::Style::new().bold();
@@ -57,7 +54,7 @@ pub fn show_themes(dark: bool, light: bool, color_mode: ColorMode) -> std::io::R
             cli::Opt::from_iter_and_git_config(&env, &["delta", "--features", theme], git_config);
         let is_dark_theme = opt.dark;
         let is_light_theme = opt.light;
-        let config = config::Config::from(opt);
+        let config = config::Config::try_from(opt)?;
 
         if (color_mode == ColorMode::Dark && is_dark_theme)
             || (color_mode == ColorMode::Light && is_light_theme)

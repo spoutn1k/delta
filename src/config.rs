@@ -1,16 +1,8 @@
-use std::{collections::HashMap, path::PathBuf};
-
-use clap::parser::ValueSource;
-use regex::Regex;
-use syntect::{
-    highlighting::{Style as SyntectStyle, Theme as SyntaxTheme},
-    parsing::SyntaxSet,
-};
-
 use crate::{
     ansi, cli,
     color::{self, ColorMode},
     delta::State,
+    errors::Result,
     fatal,
     features::{
         navigate,
@@ -27,6 +19,13 @@ use crate::{
     utils,
     utils::{bat::output::PagingMode, regex_replacement::RegexReplacement},
     wrapping::WrapConfig,
+};
+use clap::parser::ValueSource;
+use regex::Regex;
+use std::{collections::HashMap, convert::TryFrom, path::PathBuf};
+use syntect::{
+    highlighting::{Style as SyntectStyle, Theme as SyntaxTheme},
+    parsing::SyntaxSet,
 };
 
 pub const INLINE_SYMBOL_WIDTH_1: usize = 1;
@@ -183,12 +182,14 @@ impl Config {
     }
 }
 
-impl From<cli::Opt> for Config {
-    fn from(opt: cli::Opt) -> Self {
+impl TryFrom<cli::Opt> for Config {
+    type Error = crate::errors::Error;
+
+    fn try_from(opt: cli::Opt) -> Result<Self> {
         let mut styles = parse_styles::parse_styles(&opt);
         let styles_map = parse_styles::parse_styles_map(&opt);
 
-        let wrap_config = WrapConfig::from_opt(&opt, styles["inline-hint-style"]);
+        let wrap_config = WrapConfig::from_opt(&opt, styles["inline-hint-style"])?;
 
         let max_line_distance_for_naively_paired_lines = opt
             .env
@@ -285,7 +286,7 @@ impl From<cli::Opt> for Config {
             cwd_relative_to_repo_root.as_deref(),
         );
 
-        Self {
+        Ok(Self {
             available_terminal_width: opt.computed.available_terminal_width,
             background_color_extends_to_terminal_width: opt
                 .computed
@@ -438,7 +439,7 @@ impl From<cli::Opt> for Config {
             wrap_config,
             whitespace_error_style: styles["whitespace-error-style"],
             zero_style: styles["zero-style"],
-        }
+        })
     }
 }
 

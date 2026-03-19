@@ -1,21 +1,20 @@
 #![cfg(test)]
 
-use std::borrow::Cow;
-use std::fs::File;
-use std::io::{BufReader, Write};
-use std::path::Path;
+use std::{
+    borrow::Cow,
+    convert::TryFrom as _,
+    fs::File,
+    io::{BufReader, Write},
+    path::Path,
+};
 
 use bytelines::ByteLines;
 use itertools::Itertools;
 
-use crate::ansi;
-use crate::cli;
-use crate::config;
-use crate::delta::delta;
-use crate::env::DeltaEnv;
-use crate::git_config::GitConfig;
-use crate::tests::test_utils;
-use crate::utils::process::tests::FakeParentArgs;
+use crate::{
+    ansi, cli, config, delta::delta, env::DeltaEnv, git_config::GitConfig, tests::test_utils,
+    utils::process::tests::FakeParentArgs,
+};
 
 pub fn make_options_from_args_and_git_config(
     args: &[&str],
@@ -79,15 +78,16 @@ pub fn make_config_from_args_and_git_config(
     git_config_contents: Option<&[u8]>,
     git_config_path: Option<&str>,
 ) -> config::Config {
-    config::Config::from(make_options_from_args_and_git_config(
+    config::Config::try_from(make_options_from_args_and_git_config(
         args,
         git_config_contents,
         git_config_path,
     ))
+    .unwrap()
 }
 
 pub fn make_config_from_args(args: &[&str]) -> config::Config {
-    config::Config::from(make_options_from_args(args))
+    config::Config::try_from(make_options_from_args(args)).unwrap()
 }
 
 pub fn make_git_config(

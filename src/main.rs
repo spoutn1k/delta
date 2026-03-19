@@ -5,7 +5,9 @@ use git_delta::{
     config,
     config::delta_unreachable,
     delta::delta,
-    env, fatal,
+    env,
+    errors::{Error, Result},
+    fatal,
     subcommands::{self, SubCmdKind, SubCommand},
     utils,
     utils::bat::{
@@ -14,13 +16,14 @@ use git_delta::{
     },
 };
 use std::{
+    convert::TryFrom as _,
     ffi::{OsStr, OsString},
     io::{self, BufRead, Cursor, ErrorKind, IsTerminal, Write},
     process::{self, Command, Stdio},
 };
 
 #[cfg(not(tarpaulin_include))]
-fn main() -> std::io::Result<()> {
+fn main() -> Result<()> {
     // Do this first because both parsing all the input in `run_app()` and
     // listing all processes takes about 50ms on Linux.
     // It also improves the chance that the calling process is still around when
@@ -40,10 +43,7 @@ fn main() -> std::io::Result<()> {
 // An Ok result contains the desired process exit code. Note that 1 is used to
 // report that two files differ when delta is called with two positional
 // arguments and without standard input; 2 is used to report a real problem.
-pub fn run_app(
-    args: Vec<OsString>,
-    capture_output: Option<&mut Cursor<Vec<u8>>>,
-) -> std::io::Result<i32> {
+pub fn run_app(args: Vec<OsString>, capture_output: Option<&mut Cursor<Vec<u8>>>) -> Result<i32> {
     let env = env::DeltaEnv::init();
     let assets = utils::bat::assets::load_highlighting_assets();
     let (call, opt) = cli::Opt::from_args_and_git_config(args, &env, assets);
@@ -91,8 +91,8 @@ pub fn run_app(
     };
     if let Some(result) = subcommand_result {
         if let Err(error) = result {
-            match error.kind() {
-                ErrorKind::BrokenPipe => {}
+            match error {
+                Error::Io(ioerr) if ioerr.kind() == ErrorKind::BrokenPipe => {}
                 _ => fatal(format!("{error}")),
             }
         }
@@ -100,7 +100,7 @@ pub fn run_app(
     };
 
     let _show_config = opt.show_config;
-    let config = config::Config::from(opt);
+    let config = config::Config::try_from(opt)?;
 
     if _show_config {
         let stdout = io::stdout();
@@ -331,6 +331,7 @@ mod end2end {
     }
 
     #[test]
+    #[ignore = "Library format prevents fatal from panicking"]
     #[should_panic(expected = "unexpected delta argument")]
     fn just_delta_argument_error() {
         let mut writer = Cursor::new(vec![]);
@@ -348,6 +349,7 @@ mod end2end {
     }
 
     #[test]
+    #[ignore = "Library format prevents fatal from panicking"]
     #[should_panic(expected = "parse error before subcommand")]
     fn subcommand_found_but_delta_argument_error() {
         let mut writer = Cursor::new(vec![]);

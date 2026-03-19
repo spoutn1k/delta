@@ -1,11 +1,9 @@
+use crate::{errors::Result, options::theme::is_light_syntax_theme, utils};
+use itertools::Itertools;
 use std::io::{self, IsTerminal, Write};
 
-use itertools::Itertools;
-
-use crate::{options::theme::is_light_syntax_theme, utils};
-
 #[cfg(not(tarpaulin_include))]
-pub fn list_syntax_themes() -> std::io::Result<()> {
+pub fn list_syntax_themes() -> Result<()> {
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
     if stdout.is_terminal() {
@@ -15,7 +13,7 @@ pub fn list_syntax_themes() -> std::io::Result<()> {
     }
 }
 
-pub fn _list_syntax_themes_for_humans(writer: &mut dyn Write) -> std::io::Result<()> {
+pub fn _list_syntax_themes_for_humans(writer: &mut dyn Write) -> Result<()> {
     let assets = utils::bat::assets::load_highlighting_assets();
 
     writeln!(writer, "Light syntax themes:")?;
@@ -33,7 +31,7 @@ pub fn _list_syntax_themes_for_humans(writer: &mut dyn Write) -> std::io::Result
     Ok(())
 }
 
-pub fn _list_syntax_themes_for_machines(writer: &mut dyn Write) -> std::io::Result<()> {
+pub fn _list_syntax_themes_for_machines(writer: &mut dyn Write) -> Result<()> {
     let assets = utils::bat::assets::load_highlighting_assets();
     for theme in assets.themes().sorted_by_key(|t| is_light_syntax_theme(t)) {
         writeln!(

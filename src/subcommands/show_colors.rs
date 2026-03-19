@@ -1,16 +1,16 @@
-use crate::cli;
-use crate::color;
-use crate::colors;
-use crate::config;
-use crate::delta;
-use crate::env::DeltaEnv;
-use crate::paint;
-use crate::paint::BgShouldFill;
-use crate::style;
-use crate::utils::bat::output::{OutputType, PagingMode};
+use crate::{
+    cli, color, colors, config, delta,
+    env::DeltaEnv,
+    errors::Result,
+    paint,
+    paint::BgShouldFill,
+    style,
+    utils::bat::output::{OutputType, PagingMode},
+};
+use std::convert::TryFrom as _;
 
 #[cfg(not(tarpaulin_include))]
-pub fn show_colors() -> std::io::Result<()> {
+pub fn show_colors() -> Result<()> {
     use crate::{delta::DiffType, utils};
 
     let args = std::env::args_os().collect::<Vec<_>>();
@@ -22,7 +22,7 @@ pub fn show_colors() -> std::io::Result<()> {
         _ => panic!("non-Delta Call variant should not occur here"),
     };
 
-    let config = config::Config::from(opt);
+    let config = config::Config::try_from(opt)?;
     let pagercfg = (&config).into();
 
     let mut output_type =

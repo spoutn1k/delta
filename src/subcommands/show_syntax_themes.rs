@@ -1,23 +1,28 @@
-use crate::cli;
-use crate::color::{ColorMode, ColorMode::*};
-use crate::config;
-use crate::delta;
-use crate::env::DeltaEnv;
-use crate::options::theme::color_mode_from_syntax_theme;
-use crate::utils;
-use crate::utils::bat::output::{OutputType, PagingMode};
+use crate::{
+    cli,
+    color::{ColorMode, ColorMode::*},
+    config, delta,
+    env::DeltaEnv,
+    errors::Result,
+    options::theme::color_mode_from_syntax_theme,
+    utils,
+    utils::bat::output::{OutputType, PagingMode},
+};
 use clap::Parser;
-use std::io::{self, ErrorKind, IsTerminal, Read, Write};
+use std::{
+    convert::TryFrom as _,
+    io::{self, ErrorKind, IsTerminal, Read, Write},
+};
 
 #[cfg(not(tarpaulin_include))]
-pub fn show_syntax_themes() -> std::io::Result<()> {
+pub fn show_syntax_themes() -> Result<()> {
     let env = DeltaEnv::default();
     let assets = utils::bat::assets::load_highlighting_assets();
     let mut output_type = OutputType::from_mode(
         &env,
         PagingMode::QuitIfOneScreen,
         None,
-        &config::Config::from(cli::Opt::parse()).into(),
+        &config::Config::try_from(cli::Opt::parse())?.into(),
     )
     .unwrap();
     let mut writer = output_type.handle().unwrap();
@@ -25,11 +30,7 @@ pub fn show_syntax_themes() -> std::io::Result<()> {
     let stdin_data = if !io::stdin().is_terminal() {
         let mut buf = Vec::new();
         io::stdin().lock().read_to_end(&mut buf)?;
-        if !buf.is_empty() {
-            Some(buf)
-        } else {
-            None
-        }
+        if !buf.is_empty() { Some(buf) } else { None }
     } else {
         None
     };
@@ -57,7 +58,7 @@ fn _show_syntax_themes(
     color_mode: ColorMode,
     writer: &mut dyn Write,
     stdin: Option<&Vec<u8>>,
-) -> std::io::Result<()> {
+) -> Result<()> {
     use bytelines::ByteLines;
     use std::io::BufReader;
     let input = match stdin {
@@ -82,7 +83,7 @@ index f38589a..0f1bb83 100644
     };
 
     opt.computed.color_mode = color_mode;
-    let mut config = config::Config::from(opt);
+    let mut config = config::Config::try_from(opt)?;
     let title_style = ansi_term::Style::new().bold();
     let assets = utils::bat::assets::load_highlighting_assets();
 
@@ -113,8 +114,7 @@ mod tests {
     use std::io::{Cursor, Seek};
 
     use super::*;
-    use crate::ansi;
-    use crate::tests::integration_test_utils;
+    use crate::{ansi, tests::integration_test_utils};
 
     #[test]
     #[ignore] // Not working (timing out) when run by tarpaulin, presumably due to stdin detection.

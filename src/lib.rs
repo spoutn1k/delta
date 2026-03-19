@@ -25,7 +25,33 @@ pub mod subcommands;
 mod tests;
 
 pub mod errors {
-    pub use anyhow::{Context, Error, Result, anyhow};
+    use std::num::{ParseFloatError, ParseIntError};
+
+    pub type Result<T> = std::result::Result<T, Error>;
+
+    #[derive(thiserror::Error, Debug)]
+    pub enum Error {
+        #[error(
+            "No themes found. Please see https://dandavison.github.io/delta/custom-themes.html."
+        )]
+        NoThemes,
+        #[error(transparent)]
+        Io(#[from] std::io::Error),
+        #[error("Not a GitHub, GitLab, SourceHut or Codeberg repo")]
+        UnknownGitRemote,
+        #[error("Could not parse pager command: {0}")]
+        ShellParseError(#[from] shell_words::ParseError),
+        #[error("Could not open stdin for pager")]
+        NoStdin,
+        #[error("Invalid wrap-max-lines argument: {0}")]
+        WrapMaxLinesParse(#[from] ParseIntError),
+        #[error("Could not parse wrap-right-percent argument: {0}")]
+        WrapRightPercentParse(#[from] ParseFloatError),
+        #[error("Invalid value for wrap-right-percent: {0}, not between 0 and 100.")]
+        WrapRightPercentInvalidValue(f64),
+        #[error("Invalid value for {0}, display width of \"{1}\" must be {2} but is {3}")]
+        DisplayWidthInvalidValue(String, String, usize, usize),
+    }
 }
 
 pub fn fatal<T>(errmsg: T) -> !

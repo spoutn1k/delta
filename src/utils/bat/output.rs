@@ -1,17 +1,14 @@
 // https://github.com/sharkdp/bat a1b9334a44a2c652f52dddaa83dbacba57372468
 // src/output.rs
 // See src/utils/bat/LICENSE
-use std::ffi::OsString;
-use std::io::{self, Write};
-use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
-
 use super::less::retrieve_less_version;
-
-use crate::config;
-use crate::env::DeltaEnv;
-use crate::fatal;
-use crate::features::navigate;
+use crate::{config, env::DeltaEnv, errors::*, fatal, features::navigate};
+use std::{
+    ffi::OsString,
+    io::{self, Write},
+    path::PathBuf,
+    process::{Child, Command, Stdio},
+};
 
 #[derive(Debug, Default)]
 pub struct PagerCfg {
@@ -45,7 +42,6 @@ pub enum PagingMode {
     Capture,
 }
 const LESSUTFCHARDEF: &str = "LESSUTFCHARDEF";
-use crate::errors::*;
 
 pub enum OutputType {
     Pager(Child),
@@ -121,8 +117,7 @@ impl OutputType {
             &pager_from_config
                 .or(pager_from_env)
                 .unwrap_or_else(|| String::from("less")),
-        )
-        .context("Could not parse pager command.")?;
+        )?;
 
         Ok(match pager_cmd.split_first() {
             Some((pager_path, args)) => {
@@ -161,10 +156,7 @@ impl OutputType {
 
     pub fn handle(&mut self) -> Result<&mut dyn Write> {
         Ok(match *self {
-            OutputType::Pager(ref mut command) => command
-                .stdin
-                .as_mut()
-                .context("Could not open stdin for pager")?,
+            OutputType::Pager(ref mut command) => command.stdin.as_mut().ok_or(Error::NoStdin)?,
             OutputType::Stdout(ref mut handle) => handle,
             OutputType::Capture => unreachable!("capture can not be set"),
         })

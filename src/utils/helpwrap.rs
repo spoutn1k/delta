@@ -11,6 +11,7 @@ use crate::ansi::measure_text_width;
 /// the wrapped line.
 /// Example:
 /// ```
+/// use git_delta::utils::helpwrap::wrap;
 /// let wrapped = wrap("ab cd ef\n!NI!123\n|AB CD EF GH\n!NI!|123 456 789", 7, "_", "!NI!", "|");
 /// assert_eq!(wrapped, "\
 ///     _ab cd\n\

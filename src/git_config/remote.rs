@@ -1,5 +1,4 @@
-use std::result::Result;
-use std::str::FromStr;
+use std::{result::Result, str::FromStr};
 
 use lazy_static::lazy_static;
 use regex::Regex;
@@ -136,7 +135,7 @@ impl FromStr for GitRemoteRepo {
                 ),
             })
         } else {
-            Err(anyhow!("Not a GitHub, GitLab, SourceHut or Codeberg repo."))
+            Err(Error::UnknownGitRemote)
         }
     }
 }
