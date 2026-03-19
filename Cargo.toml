@@ -10,6 +10,10 @@ license = "MIT"
 repository = "https://github.com/dandavison/delta"
 version = "0.19.2"
 
+[lib]
+name = "git_delta"
+path = "src/lib.rs"
+
 [[bin]]
 name = "delta"
 path = "src/main.rs"
@@ -20,9 +24,9 @@ ansi_term = "0.12.1"
 anstyle-parse = "0.2.3"
 anyhow = "1.0.70"
 bat = { version = "0.26.0", default-features = false, features = [
-    "minimal-application",
-    "paging",
-    "regex-onig",
+  "minimal-application",
+  "paging",
+  "regex-onig",
 ] }
 bitflags = "2.2.1"
 box_drawing = "0.1.2"
@@ -31,10 +35,10 @@ chrono = "0.4.26"
 chrono-humanize = "0.2.2"
 clap_complete = "4.4.4"
 clap = { version = "4.3.14", features = [
-    "derive",
-    "help",
-    "usage",
-    "error-context",
+  "derive",
+  "help",
+  "usage",
+  "error-context",
 ] }
 console = "0.15.0"
 ctrlc = "3.2.5"

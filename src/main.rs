@@ -1,60 +1,23 @@
-mod align;
-mod ansi;
-mod cli;
-mod color;
-mod colors;
-mod config;
-mod delta;
-mod edits;
-mod env;
-mod features;
-mod format;
-mod git_config;
-mod handlers;
-mod minusplus;
-mod options;
-mod paint;
-mod parse_style;
-mod parse_styles;
-mod style;
-mod utils;
-mod wrapping;
-
-mod subcommands;
-
-mod tests;
-
-use std::ffi::{OsStr, OsString};
-use std::io::{self, BufRead, Cursor, ErrorKind, IsTerminal, Write};
-use std::process::{self, Command, Stdio};
-
 use bytelines::ByteLinesReader;
-
-use crate::cli::Call;
-use crate::config::delta_unreachable;
-use crate::delta::delta;
-use crate::subcommands::{SubCmdKind, SubCommand};
-use crate::utils::bat::assets::list_languages;
-use crate::utils::bat::output::{OutputType, PagingMode};
-
-pub fn fatal<T>(errmsg: T) -> !
-where
-    T: AsRef<str> + std::fmt::Display,
-{
-    #[cfg(not(test))]
-    {
-        eprintln!("{errmsg}");
-        // As in Config::error_exit_code: use 2 for error
-        // because diff uses 0 and 1 for non-error.
-        process::exit(2);
-    }
-    #[cfg(test)]
-    panic!("{}\n", errmsg);
-}
-
-pub mod errors {
-    pub use anyhow::{anyhow, Context, Error, Result};
-}
+use git_delta::{
+    cli,
+    cli::Call,
+    config,
+    config::delta_unreachable,
+    delta::delta,
+    env, fatal,
+    subcommands::{self, SubCmdKind, SubCommand},
+    utils,
+    utils::bat::{
+        assets::list_languages,
+        output::{OutputType, PagingMode},
+    },
+};
+use std::{
+    ffi::{OsStr, OsString},
+    io::{self, BufRead, Cursor, ErrorKind, IsTerminal, Write},
+    process::{self, Command, Stdio},
+};
 
 #[cfg(not(tarpaulin_include))]
 fn main() -> std::io::Result<()> {
@@ -302,4 +265,196 @@ pub fn run_app(
     }
 
     // `output_type` drop impl runs here
+}
+
+#[cfg(test)]
+mod end2end {
+    use git_delta::{ansi::strip_ansi_codes, subcommands::external::RG};
+    use rstest::rstest;
+    use std::{ffi::OsString, io::Cursor};
+
+    enum ExpectDiff {
+        Yes,
+        No,
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    #[rstest]
+    // #[case("/dev/null", "/dev/null", ExpectDiff::No)] https://github.com/dandavison/delta/pull/546#issuecomment-835852373
+    #[case("/etc/group", "/etc/passwd", ExpectDiff::Yes)]
+    #[case("/dev/null", "/etc/passwd", ExpectDiff::Yes)]
+    #[case("/etc/passwd", "/etc/passwd", ExpectDiff::No)]
+    fn test_diff_real_files(
+        #[case] file_a: &str,
+        #[case] file_b: &str,
+        #[case] expect_diff: ExpectDiff,
+        #[values(vec![], vec!["-@''"], vec!["-@-u"], vec!["-@-U99"], vec!["-@-U0"])] args: Vec<
+            &str,
+        >,
+    ) {
+        let mut writer = Cursor::new(vec![]);
+        let mut runargs = vec![OsString::from(file_a), OsString::from(file_b)];
+        runargs.extend(args.iter().map(OsString::from));
+        let exit_code = crate::run_app(runargs, Some(&mut writer));
+
+        assert_eq!(
+            exit_code.unwrap(),
+            match expect_diff {
+                ExpectDiff::Yes => 1,
+                ExpectDiff::No => 0,
+            }
+        );
+        assert_eq!(
+            std::str::from_utf8(writer.get_ref()).unwrap() != "",
+            match expect_diff {
+                ExpectDiff::Yes => true,
+                ExpectDiff::No => false,
+            }
+        );
+    }
+
+    #[test]
+    #[ignore] // reachable with --ignored, useful with --nocapture
+    fn test_subcmd_kind_formatter() {
+        use super::SubCmdKind::*;
+        for s in [
+            Git(Some("foo".into())),
+            Git(Some("c\"'${}".into())),
+            Git(Option::None),
+            GitDiff,
+            Diff,
+            Rg,
+            None,
+        ] {
+            eprintln!("{0} / {0:?} ", s);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "unexpected delta argument")]
+    fn just_delta_argument_error() {
+        let mut writer = Cursor::new(vec![]);
+        let runargs = [
+            "delta",
+            "--Invalid_Delta_Args",
+            "abcdefg",
+            "-C1",
+            "--Bad_diff_Args_ignored",
+        ]
+        .iter()
+        .map(OsString::from)
+        .collect::<Vec<_>>();
+        crate::run_app(runargs, Some(&mut writer)).unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "parse error before subcommand")]
+    fn subcommand_found_but_delta_argument_error() {
+        let mut writer = Cursor::new(vec![]);
+        let runargs = [
+            "delta",
+            "--Invalid_Delta_Args",
+            "git",
+            "show",
+            "-C1",
+            "--Bad_diff_Args_ignored",
+        ]
+        .iter()
+        .map(OsString::from)
+        .collect::<Vec<_>>();
+        crate::run_app(runargs, Some(&mut writer)).unwrap();
+    }
+
+    #[test]
+    fn subcommand_rg() {
+        #[cfg(windows)]
+        // `resolve_binary` only works on windows
+        if grep_cli::resolve_binary(RG).is_err() {
+            return;
+        }
+
+        #[cfg(unix)]
+        // resolve `rg` binary by walking PATH
+        if std::env::var_os("PATH")
+            .filter(|p| {
+                std::env::split_paths(&p)
+                    .filter(|p| !p.as_os_str().is_empty())
+                    .filter_map(|p| p.join(RG).metadata().ok())
+                    .any(|md| !md.is_dir())
+            })
+            .is_none()
+        {
+            return;
+        }
+
+        let mut writer = Cursor::new(vec![]);
+        let needle = format!("{}{}", "Y40ii4RihK6", "lHiK4BDsGS").to_string();
+        // --minus-style has no effect, just for cmdline parsing
+        let runargs = [
+            "--minus-style",
+            "normal",
+            "rg",
+            &needle,
+            "src/",
+            "-N",
+            "-C",
+            "2",
+            "-C0",
+        ]
+        .iter()
+        .map(OsString::from)
+        .collect::<Vec<_>>();
+        let exit_code = crate::run_app(runargs, Some(&mut writer)).unwrap();
+        let rg_output = std::str::from_utf8(writer.get_ref()).unwrap();
+        let mut lines = rg_output.lines();
+        // eprintln!("{}", rg_output);
+        assert_eq!(
+            r#"src/utils/process.rs "#,
+            strip_ansi_codes(lines.next().expect("line 1"))
+        );
+        let line2 = format!(r#"            .join("{}x");"#, needle);
+        assert_eq!(line2, strip_ansi_codes(lines.next().expect("line 2")));
+        assert_eq!(exit_code, 0);
+    }
+
+    #[test]
+    fn subcommand_git_cat_file() {
+        let mut writer = Cursor::new(vec![]);
+
+        // only 39 of the 40 long git hash, rev-parse doesn't look up full hashes
+        let runargs = "git rev-parse 5a4361fa037090adf729ab3f161832d969abc57"
+            .split(' ')
+            .map(OsString::from)
+            .collect::<Vec<_>>();
+        let exit_code = crate::run_app(runargs, Some(&mut writer)).unwrap();
+        assert!(exit_code == 0 || exit_code == 128);
+
+        // ref not found, probably a shallow git clone
+        if exit_code == 128 {
+            eprintln!("  Commit for test not found (shallow git clone?), skipping.");
+            return;
+        }
+
+        assert_eq!(
+            "5a4361fa037090adf729ab3f161832d969abc576\n",
+            std::str::from_utf8(writer.get_ref()).unwrap()
+        );
+
+        let mut writer = Cursor::new(vec![]);
+
+        let runargs = "git cat-file -p 5a4361fa037090adf729ab3f161832d969abc576:src/main.rs"
+            .split(' ')
+            .map(OsString::from)
+            .collect::<Vec<_>>();
+        let exit_code = crate::run_app(runargs, Some(&mut writer)).unwrap();
+        let hello_world = std::str::from_utf8(writer.get_ref()).unwrap();
+        assert_eq!(
+            hello_world,
+            r#"fn main() {
+    println!("Hello, world!");
+}
+"#
+        );
+        assert_eq!(exit_code, 0);
+    }
 }

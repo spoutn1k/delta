@@ -1,11 +1,9 @@
-use std::path::Path;
-
-use crate::config::{self};
-
-use crate::utils::git::retrieve_git_version;
-
-use crate::subcommands::{SubCmdKind, SubCommand};
-use std::ffi::OsString;
+use crate::{
+    config::{self},
+    subcommands::{SubCmdKind, SubCommand},
+    utils::git::retrieve_git_version,
+};
+use std::{ffi::OsString, path::Path};
 
 /// Build `git diff` command for the files provided on the command line. Fall back to
 /// `diff` if the supplied "files" use process substitution.
@@ -97,11 +95,7 @@ where
 
 #[cfg(test)]
 mod main_tests {
-    use std::ffi::OsString;
-    use std::io::Cursor;
-
     use super::diff_args_set_unified_context;
-
     use rstest::rstest;
 
     #[rstest]
@@ -118,45 +112,5 @@ mod main_tests {
         #[case] expected: bool,
     ) {
         assert_eq!(diff_args_set_unified_context(diff_args), expected)
-    }
-
-    enum ExpectDiff {
-        Yes,
-        No,
-    }
-
-    #[cfg(not(target_os = "windows"))]
-    #[rstest]
-    // #[case("/dev/null", "/dev/null", ExpectDiff::No)] https://github.com/dandavison/delta/pull/546#issuecomment-835852373
-    #[case("/etc/group", "/etc/passwd", ExpectDiff::Yes)]
-    #[case("/dev/null", "/etc/passwd", ExpectDiff::Yes)]
-    #[case("/etc/passwd", "/etc/passwd", ExpectDiff::No)]
-    fn test_diff_real_files(
-        #[case] file_a: &str,
-        #[case] file_b: &str,
-        #[case] expect_diff: ExpectDiff,
-        #[values(vec![], vec!["-@''"], vec!["-@-u"], vec!["-@-U99"], vec!["-@-U0"])] args: Vec<
-            &str,
-        >,
-    ) {
-        let mut writer = Cursor::new(vec![]);
-        let mut runargs = vec![OsString::from(file_a), OsString::from(file_b)];
-        runargs.extend(args.iter().map(OsString::from));
-        let exit_code = crate::run_app(runargs, Some(&mut writer));
-
-        assert_eq!(
-            exit_code.unwrap(),
-            match expect_diff {
-                ExpectDiff::Yes => 1,
-                ExpectDiff::No => 0,
-            }
-        );
-        assert_eq!(
-            std::str::from_utf8(writer.get_ref()).unwrap() != "",
-            match expect_diff {
-                ExpectDiff::Yes => true,
-                ExpectDiff::No => false,
-            }
-        );
     }
 }

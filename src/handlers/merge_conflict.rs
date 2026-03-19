@@ -4,12 +4,14 @@ use itertools::Itertools;
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::draw;
-use crate::cli;
-use crate::config::{self, delta_unreachable};
-use crate::delta::{DiffType, InMergeConflict, MergeParents, State, StateMachine};
-use crate::minusplus::MinusPlus;
-use crate::paint::{self, prepare};
-use crate::style::Style;
+use crate::{
+    cli,
+    config::{self, delta_unreachable},
+    delta::{DiffType, InMergeConflict, MergeParents, State, StateMachine},
+    minusplus::MinusPlus,
+    paint::{self, prepare},
+    style::Style,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MergeConflictCommit {
@@ -284,8 +286,7 @@ impl MergeConflictLines {
 
 #[cfg(test)]
 mod tests {
-    use crate::ansi::strip_ansi_codes;
-    use crate::tests::integration_test_utils;
+    use crate::{ansi::strip_ansi_codes, tests::integration_test_utils};
 
     #[test]
     fn test_toy_merge_conflict_no_context() {

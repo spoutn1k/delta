@@ -1,10 +1,9 @@
 use crate::cli::Opt;
-use clap::CommandFactory;
-use clap::{ArgMatches, Error};
+use clap::{ArgMatches, CommandFactory, Error};
 use std::ffi::{OsStr, OsString};
 
-const RG: &str = "rg";
-const GIT: &str = "git";
+pub const RG: &str = "rg";
+pub const GIT: &str = "git";
 pub const SUBCOMMANDS: &[&str] = &[RG, GIT];
 
 #[derive(PartialEq)]
@@ -35,7 +34,7 @@ impl std::fmt::Debug for SubCmdKind {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             SubCmdKind::Git(Some(arg)) => {
-                return formatter.write_fmt(format_args!("\"git {}\"", arg.escape_debug()))
+                return formatter.write_fmt(format_args!("\"git {}\"", arg.escape_debug()));
             }
             _ => format!("{self}"),
         };
@@ -138,11 +137,6 @@ pub fn extract(args: &[OsString], orig_error: Error) -> (ArgMatches, SubCommand)
 
 #[cfg(test)]
 mod test {
-    use super::RG;
-    use crate::ansi::strip_ansi_codes;
-    use std::ffi::OsString;
-    use std::io::Cursor;
-
     #[test]
     #[ignore] // reachable with --ignored, useful with --nocapture
     fn test_subcmd_kind_formatter() {
@@ -158,131 +152,5 @@ mod test {
         ] {
             eprintln!("{0} / {0:?} ", s);
         }
-    }
-
-    #[test]
-    #[should_panic(expected = "unexpected delta argument")]
-    fn just_delta_argument_error() {
-        let mut writer = Cursor::new(vec![]);
-        let runargs = [
-            "--Invalid_Delta_Args",
-            "abcdefg",
-            "-C1",
-            "--Bad_diff_Args_ignored",
-        ]
-        .iter()
-        .map(OsString::from)
-        .collect::<Vec<_>>();
-        crate::run_app(runargs, Some(&mut writer)).unwrap();
-    }
-
-    #[test]
-    #[should_panic(expected = "parse error before subcommand")]
-    fn subcommand_found_but_delta_argument_error() {
-        let mut writer = Cursor::new(vec![]);
-        let runargs = [
-            "--Invalid_Delta_Args",
-            "git",
-            "show",
-            "-C1",
-            "--Bad_diff_Args_ignored",
-        ]
-        .iter()
-        .map(OsString::from)
-        .collect::<Vec<_>>();
-        crate::run_app(runargs, Some(&mut writer)).unwrap();
-    }
-
-    #[test]
-    fn subcommand_rg() {
-        #[cfg(windows)]
-        // `resolve_binary` only works on windows
-        if grep_cli::resolve_binary(RG).is_err() {
-            return;
-        }
-
-        #[cfg(unix)]
-        // resolve `rg` binary by walking PATH
-        if std::env::var_os("PATH")
-            .filter(|p| {
-                std::env::split_paths(&p)
-                    .filter(|p| !p.as_os_str().is_empty())
-                    .filter_map(|p| p.join(RG).metadata().ok())
-                    .any(|md| !md.is_dir())
-            })
-            .is_none()
-        {
-            return;
-        }
-
-        let mut writer = Cursor::new(vec![]);
-        let needle = format!("{}{}", "Y40ii4RihK6", "lHiK4BDsGS").to_string();
-        // --minus-style has no effect, just for cmdline parsing
-        let runargs = [
-            "--minus-style",
-            "normal",
-            "rg",
-            &needle,
-            "src/",
-            "-N",
-            "-C",
-            "2",
-            "-C0",
-        ]
-        .iter()
-        .map(OsString::from)
-        .collect::<Vec<_>>();
-        let exit_code = crate::run_app(runargs, Some(&mut writer)).unwrap();
-        let rg_output = std::str::from_utf8(writer.get_ref()).unwrap();
-        let mut lines = rg_output.lines();
-        // eprintln!("{}", rg_output);
-        assert_eq!(
-            r#"src/utils/process.rs "#,
-            strip_ansi_codes(lines.next().expect("line 1"))
-        );
-        let line2 = format!(r#"            .join("{}x");"#, needle);
-        assert_eq!(line2, strip_ansi_codes(lines.next().expect("line 2")));
-        assert_eq!(exit_code, 0);
-    }
-
-    #[test]
-    fn subcommand_git_cat_file() {
-        let mut writer = Cursor::new(vec![]);
-
-        // only 39 of the 40 long git hash, rev-parse doesn't look up full hashes
-        let runargs = "git rev-parse 5a4361fa037090adf729ab3f161832d969abc57"
-            .split(' ')
-            .map(OsString::from)
-            .collect::<Vec<_>>();
-        let exit_code = crate::run_app(runargs, Some(&mut writer)).unwrap();
-        assert!(exit_code == 0 || exit_code == 128);
-
-        // ref not found, probably a shallow git clone
-        if exit_code == 128 {
-            eprintln!("  Commit for test not found (shallow git clone?), skipping.");
-            return;
-        }
-
-        assert_eq!(
-            "5a4361fa037090adf729ab3f161832d969abc576\n",
-            std::str::from_utf8(writer.get_ref()).unwrap()
-        );
-
-        let mut writer = Cursor::new(vec![]);
-
-        let runargs = "git cat-file -p 5a4361fa037090adf729ab3f161832d969abc576:src/main.rs"
-            .split(' ')
-            .map(OsString::from)
-            .collect::<Vec<_>>();
-        let exit_code = crate::run_app(runargs, Some(&mut writer)).unwrap();
-        let hello_world = std::str::from_utf8(writer.get_ref()).unwrap();
-        assert_eq!(
-            hello_world,
-            r#"fn main() {
-    println!("Hello, world!");
-}
-"#
-        );
-        assert_eq!(exit_code, 0);
     }
 }
