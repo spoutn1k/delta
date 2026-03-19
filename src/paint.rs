@@ -103,8 +103,8 @@ impl<'p> Painter<'p> {
             writer,
             config,
             line_numbers_data,
-            merge_conflict_lines: merge_conflict::MergeConflictLines::new(),
-            merge_conflict_commit_names: merge_conflict::MergeConflictCommitNames::new(),
+            merge_conflict_lines: merge_conflict::MergeConflictLines::default(),
+            merge_conflict_commit_names: merge_conflict::MergeConflictCommitNames::default(),
         }
     }
 

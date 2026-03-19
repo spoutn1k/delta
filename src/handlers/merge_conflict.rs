@@ -18,6 +18,7 @@ pub enum MergeConflictCommit {
     Theirs,
 }
 
+#[derive(Default)]
 pub struct MergeConflictCommits<T> {
     ours: T,
     ancestral: T,
@@ -274,28 +275,10 @@ impl<T> IndexMut<MergeConflictCommit> for MergeConflictCommits<T> {
 }
 
 impl MergeConflictLines {
-    pub fn new() -> Self {
-        Self {
-            ours: Vec::new(),
-            ancestral: Vec::new(),
-            theirs: Vec::new(),
-        }
-    }
-
     fn clear(&mut self) {
         self[Ours].clear();
         self[Ancestral].clear();
         self[Theirs].clear();
-    }
-}
-
-impl MergeConflictCommitNames {
-    pub fn new() -> Self {
-        Self {
-            ours: None,
-            ancestral: None,
-            theirs: None,
-        }
     }
 }
 
