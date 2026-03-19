@@ -1,7 +1,8 @@
-use std::collections::{HashMap, HashSet};
-use std::path::Path;
-use std::sync::atomic::AtomicUsize;
-use std::sync::{Arc, Condvar, Mutex, MutexGuard};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+    sync::{Arc, Condvar, Mutex, MutexGuard, atomic::AtomicUsize},
+};
 
 use lazy_static::lazy_static;
 use sysinfo::{Pid, PidExt, Process, ProcessExt, ProcessRefreshKind, SystemExt};
@@ -562,8 +563,7 @@ pub mod tests {
     use super::*;
 
     use itertools::Itertools;
-    use std::cell::RefCell;
-    use std::rc::Rc;
+    use std::{cell::RefCell, rc::Rc};
 
     thread_local! {
         static FAKE_ARGS: RefCell<TlsState<Vec<String>>> = const { RefCell::new(TlsState::None) };
@@ -820,15 +820,15 @@ pub mod tests {
     #[test]
     #[should_panic(expected = "test logic error (in once): wrong FakeParentArgs scope?")]
     fn test_process_testing_assert_for_scope_never_used() {
-        let _args = FakeParentArgs::for_scope(&"never used");
-        let _args = FakeParentArgs::once(&"never used");
+        let _args = FakeParentArgs::for_scope("never used");
+        let _args = FakeParentArgs::once("never used");
     }
 
     #[test]
     #[should_panic(expected = "test logic error (in for_scope): wrong FakeParentArgs scope?")]
     fn test_process_testing_assert_once_never_used2() {
-        let _args = FakeParentArgs::once(&"never used");
-        let _args = FakeParentArgs::for_scope(&"never used");
+        let _args = FakeParentArgs::once("never used");
+        let _args = FakeParentArgs::for_scope("never used");
     }
 
     #[test]
@@ -989,8 +989,7 @@ pub mod tests {
             Some(CallingProcess::GitBlame(no_options_command_line.clone()))
         );
 
-        let git_blame_command =
-            "git -c a=b blame -fnb --incremental -t --color-by-age -M --since=3.weeks --contents annotation.txt -C -C2 hello.txt";
+        let git_blame_command = "git -c a=b blame -fnb --incremental -t --color-by-age -M --since=3.weeks --contents annotation.txt -C -C2 hello.txt";
 
         // here -C2 is parsed as -C and -2. It doesn't really matters because we only use last_arg from options
         // to determine the file type.
