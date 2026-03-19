@@ -10,9 +10,9 @@ use syntect::{
 
 use crate::{
     ansi,
-    config::{self, Config, delta_unreachable},
+    config::{self, Config},
     delta::{DiffType, InMergeConflict, MergeParents, State},
-    edits,
+    delta_unreachable, edits,
     features::{
         hyperlinks,
         line_numbers::{self, LineNumbersData},

@@ -1,4 +1,4 @@
-use crate::config::delta_unreachable;
+use crate::delta_unreachable;
 
 /// A value associated with a Delta command-line option name.
 pub enum OptionValue {

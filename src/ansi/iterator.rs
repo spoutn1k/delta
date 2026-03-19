@@ -1,7 +1,6 @@
 use anstyle_parse::{Params, ParamsIter};
 use core::str::Bytes;
-use std::convert::TryFrom;
-use std::iter;
+use std::{convert::TryFrom, iter};
 
 pub struct AnsiElementIterator<'a> {
     // The input bytes
@@ -307,7 +306,9 @@ mod tests {
             match element {
                 Element::Sgr(style, _, _) => assert!(style::ansi_term_style_equality(
                     style,
-                    style::Style::from_git_str(git_style_string).ansi_term_style
+                    style::Style::from_git_str(git_style_string)
+                        .unwrap()
+                        .ansi_term_style
                 )),
                 _ => unreachable!(),
             }
@@ -327,7 +328,9 @@ mod tests {
             match element {
                 Element::Sgr(style, _, _) => assert!(style::ansi_term_style_equality(
                     style,
-                    style::Style::from_git_str(git_style_string).ansi_term_style
+                    style::Style::from_git_str(git_style_string)
+                        .unwrap()
+                        .ansi_term_style
                 )),
                 _ => unreachable!(),
             }

@@ -1,14 +1,13 @@
 mod remote;
-
 pub use remote::GitRemoteRepo;
 
-use crate::env::DeltaEnv;
-use regex::Regex;
-use std::cell::OnceCell;
-use std::collections::HashMap;
-use std::path::Path;
-
+use crate::{
+    env::DeltaEnv,
+    errors::{Error, Result},
+};
 use lazy_static::lazy_static;
+use regex::Regex;
+use std::{cell::OnceCell, collections::HashMap, path::Path};
 
 pub struct GitConfig {
     config: git2::Config,
@@ -39,22 +38,22 @@ impl Clone for GitConfig {
 
 impl GitConfig {
     #[cfg(not(test))]
-    pub fn try_create(env: &DeltaEnv) -> Option<Self> {
-        use crate::fatal;
+    pub fn try_create(env: &DeltaEnv) -> crate::errors::Result<Option<Self>> {
+        use crate::errors::Error;
 
         let repo = match &env.current_dir {
             Some(dir) => git2::Repository::discover(dir).ok(),
             _ => None,
         };
+
         let config = match &repo {
             Some(repo) => repo.config().ok(),
             None => git2::Config::open_default().ok(),
         };
-        match config {
+
+        Ok(match config {
             Some(mut config) => {
-                let config = config.snapshot().unwrap_or_else(|err| {
-                    fatal(format!("Failed to read git config: {err}"));
-                });
+                let config = config.snapshot().map_err(Error::GitConfigError)?;
                 Some(Self {
                     config,
                     config_from_env_var: parse_config_from_env_var(env),
@@ -64,13 +63,13 @@ impl GitConfig {
                 })
             }
             None => None,
-        }
+        })
     }
 
     #[cfg(test)]
-    pub fn try_create(_env: &DeltaEnv) -> Option<Self> {
+    pub fn try_create(_env: &DeltaEnv) -> crate::errors::Result<Option<Self>> {
         // Do not read local git configs when testing
-        None
+        Ok(None)
     }
 
     #[cfg(test)]
@@ -85,33 +84,24 @@ impl GitConfig {
         })
     }
 
-    pub fn from_path(env: &DeltaEnv, path: &Path, honor_env_var: bool) -> Self {
-        use crate::fatal;
+    pub fn from_path(env: &DeltaEnv, path: &Path, honor_env_var: bool) -> Result<Self> {
+        let config = git2::Config::open(path)
+            .and_then(|mut config| config.snapshot())
+            .map_err(Error::GitConfigError)?;
 
-        match git2::Config::open(path) {
-            Ok(mut config) => {
-                let config = config.snapshot().unwrap_or_else(|err| {
-                    fatal(format!("Failed to read git config: {err}"));
-                });
-
-                Self {
-                    config,
-                    config_from_env_var: if honor_env_var {
-                        parse_config_from_env_var(env)
-                    } else {
-                        HashMap::new()
-                    },
-                    repo: None,
-                    enabled: true,
-                    remote_url: OnceCell::new(),
-                    #[cfg(test)]
-                    path: path.into(),
-                }
-            }
-            Err(e) => {
-                fatal(format!("Failed to read git config: {}", e.message()));
-            }
-        }
+        Ok(Self {
+            config,
+            config_from_env_var: if honor_env_var {
+                parse_config_from_env_var(env)
+            } else {
+                HashMap::new()
+            },
+            repo: None,
+            enabled: true,
+            remote_url: OnceCell::new(),
+            #[cfg(test)]
+            path: path.into(),
+        })
     }
 
     pub fn get<T>(&self, key: &str) -> Option<T>

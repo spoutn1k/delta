@@ -1,24 +1,24 @@
-use std::collections::HashMap;
-use std::str::FromStr;
-
+use crate::{
+    errors::{Error, Result},
+    git_config::GitConfig,
+    utils,
+};
+use ColorMode::*;
 use ansi_term::Color;
 use lazy_static::lazy_static;
+use std::{collections::HashMap, str::FromStr};
 use syntect::highlighting::Color as SyntectColor;
 
-use crate::fatal;
-use crate::git_config::GitConfig;
-use crate::utils;
-use ColorMode::*;
-
-pub fn parse_color(s: &str, true_color: bool, git_config: Option<&GitConfig>) -> Option<Color> {
+pub fn parse_color(
+    s: &str,
+    true_color: bool,
+    git_config: Option<&GitConfig>,
+) -> Result<Option<Color>> {
     if s == "normal" {
-        return None;
+        return Ok(None);
     }
-    let die = || {
-        fatal(format!("Invalid color or style attribute: {s}"));
-    };
     let syntect_color = if s.starts_with('#') {
-        SyntectColor::from_str(s).unwrap_or_else(|_| die())
+        SyntectColor::from_str(s).map_err(|_| Error::ColorInvalid(s.to_string()))?
     } else {
         let syntect_color = s
             .parse::<u8>()
@@ -32,11 +32,16 @@ pub fn parse_color(s: &str, true_color: bool, git_config: Option<&GitConfig>) ->
                     return parse_color(&val, true_color, None);
                 }
             }
-            die();
+
+            return Err(Error::ColorInvalid(s.to_string()));
         }
         syntect_color.unwrap()
     };
-    utils::bat::terminal::to_ansi_color(syntect_color, true_color)
+
+    Ok(utils::bat::terminal::to_ansi_color(
+        syntect_color,
+        true_color,
+    ))
 }
 
 pub fn color_to_string(color: Color) -> String {

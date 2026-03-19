@@ -1,14 +1,17 @@
-use std::cmp::min;
-
+use crate::{
+    cli,
+    config::Config,
+    delta::{DiffType, InMergeConflict, MergeParents, State, StateMachine},
+    delta_unreachable,
+    paint::{prepare, prepare_raw_line},
+    style,
+    utils::{
+        process::{self, CallingProcess},
+        tabs,
+    },
+};
 use lazy_static::lazy_static;
-
-use crate::cli;
-use crate::config::{delta_unreachable, Config};
-use crate::delta::{DiffType, InMergeConflict, MergeParents, State, StateMachine};
-use crate::paint::{prepare, prepare_raw_line};
-use crate::style;
-use crate::utils::process::{self, CallingProcess};
-use crate::utils::tabs;
+use std::cmp::min;
 
 // HACK: WordDiff should probably be a distinct top-level line state
 pub fn is_word_diff() -> bool {

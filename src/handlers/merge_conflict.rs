@@ -5,9 +5,9 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use super::draw;
 use crate::{
-    cli,
-    config::{self, delta_unreachable},
+    cli, config,
     delta::{DiffType, InMergeConflict, MergeParents, State, StateMachine},
+    delta_unreachable,
     minusplus::MinusPlus,
     paint::{self, prepare},
     style::Style,

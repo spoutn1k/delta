@@ -1,10 +1,10 @@
+use crate::{
+    color, delta_unreachable,
+    errors::{Error, Result},
+    git_config::GitConfig,
+    style::{DecorationStyle, Style},
+};
 use bitflags::bitflags;
-
-use crate::color;
-use crate::config::delta_unreachable;
-use crate::fatal;
-use crate::git_config::GitConfig;
-use crate::style::{DecorationStyle, Style};
 
 impl Style {
     /// Construct Style from style and decoration-style strings supplied on command line, together
@@ -17,25 +17,25 @@ impl Style {
         decoration_style_string: Option<&str>,
         true_color: bool,
         git_config: Option<&GitConfig>,
-    ) -> Self {
+    ) -> Result<Self> {
         let (ansi_term_style, is_omitted, is_raw, is_syntax_highlighted) =
-            parse_ansi_term_style(style_string, default, true_color, git_config);
+            parse_ansi_term_style(style_string, default, true_color, git_config)?;
         let decoration_style = DecorationStyle::from_str(
             decoration_style_string.unwrap_or(""),
             true_color,
             git_config,
-        );
-        Self {
+        )?;
+        Ok(Self {
             ansi_term_style,
             is_emph: false,
             is_omitted,
             is_raw,
             is_syntax_highlighted,
             decoration_style,
-        }
+        })
     }
 
-    pub fn from_git_str(git_style_string: &str) -> Self {
+    pub fn from_git_str(git_style_string: &str) -> Result<Self> {
         Self::from_str(git_style_string, None, None, true, None)
     }
 
@@ -46,7 +46,7 @@ impl Style {
         decoration_style_string: Option<&str>,
         true_color: bool,
         git_config: Option<&GitConfig>,
-    ) -> Self {
+    ) -> Result<Self> {
         let (special_attributes_from_style_string, style_string) =
             extract_special_decoration_attributes_from_non_decoration_style_string(style_string);
         let mut style = Style::from_str(
@@ -55,13 +55,13 @@ impl Style {
             decoration_style_string,
             true_color,
             git_config,
-        );
+        )?;
         // TODO: box in this context resulted in box-with-underline for commit and file
         style.decoration_style = DecorationStyle::apply_special_decoration_attributes(
             &mut style,
             special_attributes_from_style_string,
         );
-        style
+        Ok(style)
     }
 }
 
@@ -76,16 +76,20 @@ bitflags! {
 }
 
 impl DecorationStyle {
-    pub fn from_str(style_string: &str, true_color: bool, git_config: Option<&GitConfig>) -> Self {
+    pub fn from_str(
+        style_string: &str,
+        true_color: bool,
+        git_config: Option<&GitConfig>,
+    ) -> Result<Self> {
         let (special_attributes, style_string) =
             extract_special_decoration_attributes(style_string);
         let (style, is_omitted, is_raw, is_syntax_highlighted) =
-            parse_ansi_term_style(&style_string, None, true_color, git_config);
+            parse_ansi_term_style(&style_string, None, true_color, git_config)?;
         if is_raw {
-            fatal("'raw' may not be used in a decoration style.");
+            Err(Error::DecorationStyleInvalidArgument("raw".to_owned()))?;
         };
         if is_syntax_highlighted {
-            fatal("'syntax' may not be used in a decoration style.");
+            Err(Error::DecorationStyleInvalidArgument("syntax".to_owned()))?;
         };
         #[allow(non_snake_case)]
         let (BOX, UL, OL, EMPTY) = (
@@ -94,7 +98,7 @@ impl DecorationStyle {
             DecorationAttributes::OVERLINE,
             DecorationAttributes::EMPTY,
         );
-        match special_attributes {
+        Ok(match special_attributes {
             bits if bits == EMPTY => DecorationStyle::NoDecoration,
             bits if bits == BOX => DecorationStyle::Box(style),
             bits if bits == UL => DecorationStyle::Underline(style),
@@ -105,7 +109,7 @@ impl DecorationStyle {
             bits if bits == BOX | UL | OL => DecorationStyle::BoxWithUnderOverline(style),
             _ if is_omitted => DecorationStyle::NoDecoration,
             _ => delta_unreachable("Unreachable code path reached in parse_decoration_style."),
-        }
+        })
     }
 
     fn apply_special_decoration_attributes(
@@ -148,7 +152,7 @@ fn parse_ansi_term_style(
     default: Option<Style>,
     true_color: bool,
     git_config: Option<&GitConfig>,
-) -> (ansi_term::Style, bool, bool, bool) {
+) -> Result<(ansi_term::Style, bool, bool, bool)> {
     let mut style = ansi_term::Style::new();
     let mut seen_foreground = false;
     let mut seen_background = false;
@@ -196,27 +200,21 @@ fn parse_ansi_term_style(
                 style.foreground = default.and_then(|s| s.ansi_term_style.foreground);
                 is_syntax_highlighted = default.map(|s| s.is_syntax_highlighted).unwrap_or(false);
             } else {
-                style.foreground = color::parse_color(word, true_color, git_config);
+                style.foreground = color::parse_color(word, true_color, git_config)?;
             }
             seen_foreground = true;
         } else if !seen_background {
             if word == "syntax" {
-                fatal(
-                    "You have used the special color 'syntax' as a background color \
-                       (second color in a style string). It may only be used as a foreground \
-                       color (first color in a style string).",
-                );
+                Err(Error::SyntaxBackground)?
             } else if word == "auto" {
                 background_is_auto = true;
                 style.background = default.and_then(|s| s.ansi_term_style.background);
             } else {
-                style.background = color::parse_color(word, true_color, git_config);
+                style.background = color::parse_color(word, true_color, git_config)?;
             }
             seen_background = true;
         } else {
-            fatal(format!(
-                "Invalid style string: {s}. See the STYLES section of delta --help.",
-            ));
+            Err(Error::InvalidStyleString(s.to_owned()))?
         }
     }
     if foreground_is_auto && background_is_auto {
@@ -227,7 +225,7 @@ fn parse_ansi_term_style(
             is_raw = default.map(|s| s.is_raw).unwrap_or(false);
         }
     }
-    (style, is_omitted, is_raw, is_syntax_highlighted)
+    Ok((style, is_omitted, is_raw, is_syntax_highlighted))
 }
 
 /// Extract set of 'special decoration attributes' and return it along with modified style string.
@@ -277,11 +275,11 @@ mod tests {
     #[test]
     fn test_parse_ansi_term_style() {
         assert_eq!(
-            parse_ansi_term_style("", None, false, None),
+            parse_ansi_term_style("", None, false, None).unwrap(),
             (ansi_term::Style::new(), false, false, false)
         );
         assert_eq!(
-            parse_ansi_term_style("red", None, false, None),
+            parse_ansi_term_style("red", None, false, None).unwrap(),
             (
                 ansi_term::Style {
                     foreground: Some(ansi_term::Color::Red),
@@ -293,7 +291,7 @@ mod tests {
             )
         );
         assert_eq!(
-            parse_ansi_term_style("red green", None, false, None),
+            parse_ansi_term_style("red green", None, false, None).unwrap(),
             (
                 ansi_term::Style {
                     foreground: Some(ansi_term::Color::Red),
@@ -306,7 +304,7 @@ mod tests {
             )
         );
         assert_eq!(
-            parse_ansi_term_style("bold red underline green blink", None, false, None),
+            parse_ansi_term_style("bold red underline green blink", None, false, None).unwrap(),
             (
                 ansi_term::Style {
                     foreground: Some(ansi_term::Color::Red),
@@ -326,11 +324,11 @@ mod tests {
     #[test]
     fn test_parse_ansi_term_style_with_special_syntax_color() {
         assert_eq!(
-            parse_ansi_term_style("syntax", None, false, None),
+            parse_ansi_term_style("syntax", None, false, None).unwrap(),
             (ansi_term::Style::new(), false, false, true)
         );
         assert_eq!(
-            parse_ansi_term_style("syntax italic white hidden", None, false, None),
+            parse_ansi_term_style("syntax italic white hidden", None, false, None).unwrap(),
             (
                 ansi_term::Style {
                     background: Some(ansi_term::Color::White),
@@ -344,7 +342,7 @@ mod tests {
             )
         );
         assert_eq!(
-            parse_ansi_term_style("bold syntax italic white hidden", None, false, None),
+            parse_ansi_term_style("bold syntax italic white hidden", None, false, None).unwrap(),
             (
                 ansi_term::Style {
                     background: Some(ansi_term::Color::White),
@@ -363,12 +361,12 @@ mod tests {
     #[test]
     fn test_parse_ansi_term_style_with_special_omit_attribute() {
         assert_eq!(
-            parse_ansi_term_style("omit", None, false, None),
+            parse_ansi_term_style("omit", None, false, None).unwrap(),
             (ansi_term::Style::new(), true, false, false)
         );
         // It doesn't make sense for omit to be combined with anything else, but it is not an error.
         assert_eq!(
-            parse_ansi_term_style("omit syntax italic white hidden", None, false, None),
+            parse_ansi_term_style("omit syntax italic white hidden", None, false, None).unwrap(),
             (
                 ansi_term::Style {
                     background: Some(ansi_term::Color::White),
@@ -386,12 +384,12 @@ mod tests {
     #[test]
     fn test_parse_ansi_term_style_with_special_raw_attribute() {
         assert_eq!(
-            parse_ansi_term_style("raw", None, false, None),
+            parse_ansi_term_style("raw", None, false, None).unwrap(),
             (ansi_term::Style::new(), false, true, false)
         );
         // It doesn't make sense for raw to be combined with anything else, but it is not an error.
         assert_eq!(
-            parse_ansi_term_style("raw syntax italic white hidden", None, false, None),
+            parse_ansi_term_style("raw syntax italic white hidden", None, false, None).unwrap(),
             (
                 ansi_term::Style {
                     background: Some(ansi_term::Color::White),
@@ -452,7 +450,7 @@ mod tests {
     #[test]
     fn test_decoration_style_from_str_empty_string() {
         assert_eq!(
-            DecorationStyle::from_str("", true, None),
+            DecorationStyle::from_str("", true, None).unwrap(),
             DecorationStyle::NoDecoration,
         )
     }
@@ -460,7 +458,7 @@ mod tests {
     #[test]
     fn test_decoration_style_from_str() {
         assert_eq!(
-            DecorationStyle::from_str("ol red box bold green ul", true, None),
+            DecorationStyle::from_str("ol red box bold green ul", true, None).unwrap(),
             DecorationStyle::BoxWithUnderOverline(ansi_term::Style {
                 foreground: Some(ansi_term::Color::Red),
                 background: Some(ansi_term::Color::Green),
@@ -486,7 +484,7 @@ mod tests {
             ..ansi_term::Style::new()
         };
         assert_eq!(
-            actual_style,
+            actual_style.unwrap(),
             Style {
                 ansi_term_style: red_green_bold,
                 decoration_style: DecorationStyle::BoxWithUnderOverline(red_green_bold),
@@ -500,7 +498,7 @@ mod tests {
         let actual_style = Style::from_str("raw", None, Some("box"), true, None);
         let empty_ansi_term_style = ansi_term::Style::new();
         assert_eq!(
-            actual_style,
+            actual_style.unwrap(),
             Style {
                 ansi_term_style: empty_ansi_term_style,
                 decoration_style: DecorationStyle::Box(empty_ansi_term_style),
@@ -520,7 +518,7 @@ mod tests {
             ..ansi_term::Style::new()
         };
         assert_eq!(
-            actual_style,
+            actual_style.unwrap(),
             Style {
                 decoration_style: DecorationStyle::BoxWithUnderOverline(red_green_bold),
                 ..Style::new()
@@ -544,7 +542,7 @@ mod tests {
             ..ansi_term::Style::new()
         });
         assert_eq!(
-            actual_style,
+            actual_style.unwrap(),
             Style {
                 decoration_style: expected_decoration_style,
                 ..Style::new()
@@ -563,7 +561,7 @@ mod tests {
         );
         let empty_ansi_term_style = ansi_term::Style::new();
         assert_eq!(
-            actual_style,
+            actual_style.unwrap(),
             Style {
                 ansi_term_style: empty_ansi_term_style,
                 decoration_style: DecorationStyle::Box(empty_ansi_term_style),

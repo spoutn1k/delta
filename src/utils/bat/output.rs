@@ -2,7 +2,7 @@
 // src/output.rs
 // See src/utils/bat/LICENSE
 use super::less::retrieve_less_version;
-use crate::{config, env::DeltaEnv, errors::*, fatal, features::navigate};
+use crate::{config, env::DeltaEnv, errors::*, features::navigate};
 use std::{
     ffi::OsString,
     io::{self, Write},
@@ -60,7 +60,7 @@ impl Drop for OutputType {
 impl OutputType {
     /// Create a pager and write all data into it. Waits until the pager exits.
     /// The expectation is that the program will exit afterwards.
-    pub fn oneshot_write(data: String) -> io::Result<()> {
+    pub fn oneshot_write(data: String) -> Result<()> {
         let mut output_type = OutputType::from_mode(
             &DeltaEnv::init(),
             PagingMode::QuitIfOneScreen,
@@ -69,7 +69,9 @@ impl OutputType {
         )
         .unwrap();
         let mut writer = output_type.handle().unwrap();
-        write!(&mut writer, "{data}")
+        write!(&mut writer, "{data}")?;
+
+        Ok(())
     }
 
     pub fn from_mode(
@@ -134,7 +136,7 @@ impl OutputType {
                         config,
                     )
                 } else {
-                    _make_process_from_pager_path(pager_path, args)
+                    _make_process_from_pager_path(pager_path, args)?
                 };
                 if let Some(mut process) = process {
                     process
@@ -228,21 +230,16 @@ fn _make_process_from_less_path(
     }
 }
 
-fn _make_process_from_pager_path(pager_path: PathBuf, args: &[String]) -> Option<Command> {
+fn _make_process_from_pager_path(pager_path: PathBuf, args: &[String]) -> Result<Option<Command>> {
     if pager_path.file_stem() == Some(&OsString::from("delta")) {
-        fatal(
-            "\
-It looks like you have set delta as the value of $PAGER. \
-This would result in a non-terminating recursion. \
-delta is not an appropriate value for $PAGER \
-(but it is an appropriate value for $GIT_PAGER).",
-        );
+        Err(Error::DeltaAsPager)?
     }
+
     if let Ok(pager_path) = grep_cli::resolve_binary(pager_path) {
         let mut p = Command::new(pager_path);
         p.args(args);
-        Some(p)
+        Ok(Some(p))
     } else {
-        None
+        Ok(None)
     }
 }

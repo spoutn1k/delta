@@ -17,7 +17,7 @@ pub fn show_colors() -> Result<()> {
     let env = DeltaEnv::default();
     let assets = utils::bat::assets::load_highlighting_assets();
 
-    let opt = match cli::Opt::from_args_and_git_config(args, &env, assets) {
+    let opt = match cli::Opt::from_args_and_git_config(args, &env, assets)? {
         (cli::Call::Delta(_), Some(opt)) => opt,
         _ => panic!("non-Delta Call variant should not occur here"),
     };
@@ -55,8 +55,9 @@ pub fn show_colors() -> Result<()> {
                 )
             }
             // Two syntax-highlighted lines with background color
-            let color =
-                color::parse_color(color_name, config.true_color, config.git_config()).unwrap();
+            let color = color::parse_color(color_name, config.true_color, config.git_config())
+                .unwrap()
+                .unwrap();
             style.ansi_term_style.background = Some(color);
             for line in [
                 &format!(r#"export function color(): string {{ return "{color_name}" }}"#),

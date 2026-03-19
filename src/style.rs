@@ -1,12 +1,10 @@
-use std::borrow::Cow;
-use std::fmt;
-use std::hash::{Hash, Hasher};
-
+use crate::{ansi, color, errors::Result, git_config::GitConfig};
 use lazy_static::lazy_static;
-
-use crate::ansi;
-use crate::color;
-use crate::git_config::GitConfig;
+use std::{
+    borrow::Cow,
+    fmt,
+    hash::{Hash, Hasher},
+};
 
 // PERF: Avoid deriving Copy here?
 #[derive(Clone, Copy, PartialEq, Default)]
@@ -140,15 +138,15 @@ pub fn paint_color_string<'a>(
     color_string: &'a str,
     true_color: bool,
     git_config: Option<&GitConfig>,
-) -> ansi_term::ANSIGenericString<'a, str> {
-    if let Some(color) = color::parse_color(color_string, true_color, git_config) {
+) -> Result<ansi_term::ANSIGenericString<'a, str>> {
+    if let Some(color) = color::parse_color(color_string, true_color, git_config)? {
         let style = ansi_term::Style {
             background: Some(color),
             ..ansi_term::Style::default()
         };
-        style.paint(color_string)
+        Ok(style.paint(color_string))
     } else {
-        ansi_term::ANSIGenericString::from(color_string)
+        Ok(ansi_term::ANSIGenericString::from(color_string))
     }
 }
 
@@ -415,7 +413,11 @@ pub mod tests {
     #[test]
     fn test_parse_git_style_string_and_ansi_code_iterator() {
         for (git_style_string, git_output) in &*GIT_STYLE_STRING_EXAMPLES {
-            assert!(Style::from_git_str(git_style_string).is_applied_to(git_output));
+            assert!(
+                Style::from_git_str(git_style_string)
+                    .unwrap()
+                    .is_applied_to(git_output)
+            );
         }
     }
 
@@ -423,7 +425,11 @@ pub mod tests {
     fn test_is_applied_to_negative_assertion() {
         let style_string_from_24 = "bold #aabbcc ul 19 strike";
         let git_output_from_25 = "\x1b[1;4;9;38;5;19;48;2;170;187;204m+\x1b[m\x1b[1;4;9;38;5;19;48;2;170;187;204mtext\x1b[m\n";
-        assert!(!Style::from_git_str(style_string_from_24).is_applied_to(git_output_from_25));
+        assert!(
+            !Style::from_git_str(style_string_from_24)
+                .unwrap()
+                .is_applied_to(git_output_from_25)
+        );
     }
 
     #[test]

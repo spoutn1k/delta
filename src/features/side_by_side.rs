@@ -1,18 +1,17 @@
-use itertools::Itertools;
-use syntect::highlighting::Style as SyntectStyle;
-use unicode_width::UnicodeWidthStr;
-
 use crate::{
     ansi, cli,
-    config::{self, Config, delta_unreachable},
+    config::{self, Config},
     delta::{DiffType, State},
-    edits,
+    delta_unreachable, edits,
     features::{OptionValueFunction, line_numbers},
     minusplus::*,
     paint::{BgFillMethod, BgShouldFill, LineSections, Painter},
     style::Style,
     wrapping::{wrap_minusplus_block, wrap_zero_block},
 };
+use itertools::Itertools;
+use syntect::highlighting::Style as SyntectStyle;
+use unicode_width::UnicodeWidthStr;
 
 pub fn make_feature() -> Vec<(String, OptionValueFunction)> {
     builtin_feature!([

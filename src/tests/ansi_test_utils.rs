@@ -1,13 +1,8 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 pub mod ansi_test_utils {
+    use crate::{ansi, config::Config, delta::State, errors::Result, paint, style::Style};
     use ansi_term;
-
-    use crate::ansi;
-    use crate::config::Config;
-    use crate::delta::State;
-    use crate::paint;
-    use crate::style::Style;
 
     // Check if `output[line_number]` start with `expected_prefix`
     // Then check if the first style in the line is the `expected_style`
@@ -18,14 +13,17 @@ pub mod ansi_test_utils {
         expected_style: &str,
         config: &Config,
     ) {
-        assert!(_line_has_style(
-            output,
-            line_number,
-            expected_prefix,
-            expected_style,
-            config,
-            false,
-        ));
+        assert!(
+            _line_has_style(
+                output,
+                line_number,
+                expected_prefix,
+                expected_style,
+                config,
+                false,
+            )
+            .unwrap()
+        );
     }
 
     // Check if `output[line_number]` start with `expected_prefix`
@@ -50,6 +48,7 @@ pub mod ansi_test_utils {
                 config,
             )
             .unwrap()
+            .unwrap()
         );
     }
 
@@ -62,14 +61,17 @@ pub mod ansi_test_utils {
         expected_style: &str,
         config: &Config,
     ) {
-        assert!(_line_get_substring_matching_style(
-            output,
-            line_number,
-            expected_prefix,
-            expected_style,
-            config,
-        )
-        .is_none());
+        assert!(
+            _line_get_substring_matching_style(
+                output,
+                line_number,
+                expected_prefix,
+                expected_style,
+                config,
+            )
+            .unwrap()
+            .is_none()
+        );
     }
 
     pub fn assert_line_does_not_have_style(
@@ -79,14 +81,17 @@ pub mod ansi_test_utils {
         expected_style: &str,
         config: &Config,
     ) {
-        assert!(!_line_has_style(
-            output,
-            line_number,
-            expected_prefix,
-            expected_style,
-            config,
-            false,
-        ));
+        assert!(
+            !_line_has_style(
+                output,
+                line_number,
+                expected_prefix,
+                expected_style,
+                config,
+                false,
+            )
+            .unwrap()
+        );
     }
 
     pub fn assert_line_has_4_bit_color_style(
@@ -96,14 +101,17 @@ pub mod ansi_test_utils {
         expected_style: &str,
         config: &Config,
     ) {
-        assert!(_line_has_style(
-            output,
-            line_number,
-            expected_prefix,
-            expected_style,
-            config,
-            true,
-        ));
+        assert!(
+            _line_has_style(
+                output,
+                line_number,
+                expected_prefix,
+                expected_style,
+                config,
+                true,
+            )
+            .unwrap()
+        );
     }
 
     pub fn assert_line_has_no_color(output: &str, line_number: usize, expected_prefix: &str) {
@@ -213,7 +221,7 @@ pub mod ansi_test_utils {
         expected_prefix: &str,
         expected_style: &str,
         config: &Config,
-    ) -> Option<&'a str> {
+    ) -> Result<Option<&'a str>> {
         let line = _line_extract(output, line_number, expected_prefix);
         let style = Style::from_str(
             expected_style,
@@ -221,8 +229,8 @@ pub mod ansi_test_utils {
             None,
             config.true_color,
             config.git_config.as_ref(),
-        );
-        style.get_matching_substring(line)
+        )?;
+        Ok(style.get_matching_substring(line))
     }
 
     fn _line_has_style(
@@ -232,7 +240,7 @@ pub mod ansi_test_utils {
         expected_style: &str,
         config: &Config,
         _4_bit_color: bool,
-    ) -> bool {
+    ) -> Result<bool> {
         let line = _line_extract(output, line_number, expected_prefix);
         let mut style = Style::from_str(
             expected_style,
@@ -240,14 +248,14 @@ pub mod ansi_test_utils {
             None,
             config.true_color,
             config.git_config(),
-        );
+        )?;
         if _4_bit_color {
             style.ansi_term_style.foreground = style
                 .ansi_term_style
                 .foreground
                 .map(ansi_term_fixed_foreground_to_4_bit_color);
         }
-        style.is_applied_to(line)
+        Ok(style.is_applied_to(line))
     }
 
     fn ansi_term_fixed_foreground_to_4_bit_color(color: ansi_term::Color) -> ansi_term::Color {

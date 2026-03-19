@@ -65,7 +65,7 @@ fn _make_options_from_args_and_git_config(
             None
         }
     };
-    cli::Opt::from_iter_and_git_config(&env, args, git_config)
+    cli::Opt::from_iter_and_git_config(&env, args, git_config).unwrap()
 }
 
 pub fn make_options_from_args(args: &[&str]) -> cli::Opt {
@@ -99,7 +99,7 @@ pub fn make_git_config(
     let path = Path::new(path);
     let mut file = File::create(path).unwrap();
     file.write_all(contents).unwrap();
-    GitConfig::from_path(env, path, honor_env_var)
+    GitConfig::from_path(env, path, honor_env_var).unwrap()
 }
 
 pub fn get_line_of_code_from_delta(

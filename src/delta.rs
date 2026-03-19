@@ -1,20 +1,24 @@
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::io::{self, BufRead, IsTerminal, Write};
-
+use crate::{
+    ansi,
+    config::{Config, GrepType},
+    delta_unreachable,
+    errors::Result,
+    features,
+    handlers::{
+        self, grep,
+        hunk_header::{AmbiguousDiffMinusCounter, ParsedHunkHeader},
+        merge_conflict,
+    },
+    paint::Painter,
+    style::DecorationStyle,
+    utils,
+};
 use bytelines::ByteLines;
-
-use crate::ansi;
-use crate::config::delta_unreachable;
-use crate::config::Config;
-use crate::config::GrepType;
-use crate::features;
-use crate::handlers::grep;
-use crate::handlers::hunk_header::{AmbiguousDiffMinusCounter, ParsedHunkHeader};
-use crate::handlers::{self, merge_conflict};
-use crate::paint::Painter;
-use crate::style::DecorationStyle;
-use crate::utils;
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    io::{self, BufRead, IsTerminal, Write},
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum State {
@@ -114,7 +118,7 @@ pub struct StateMachine<'a> {
     pub minus_line_counter: AmbiguousDiffMinusCounter,
 }
 
-pub fn delta<I>(lines: ByteLines<I>, writer: &mut dyn Write, config: &Config) -> std::io::Result<()>
+pub fn delta<I>(lines: ByteLines<I>, writer: &mut dyn Write, config: &Config) -> Result<()>
 where
     I: BufRead,
 {
@@ -143,7 +147,7 @@ impl<'a> StateMachine<'a> {
         }
     }
 
-    fn consume<I>(&mut self, mut lines: ByteLines<I>) -> std::io::Result<()>
+    fn consume<I>(&mut self, mut lines: ByteLines<I>) -> Result<()>
     where
         I: BufRead,
     {

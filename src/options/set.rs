@@ -1,21 +1,45 @@
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::convert::TryInto;
-use std::result::Result;
-use std::str::FromStr;
-
+use crate::{
+    cli, config,
+    env::DeltaEnv,
+    features,
+    git_config::GitConfig,
+    options::{
+        option_value::{OptionValue, ProvenancedOptionValue},
+        theme,
+    },
+    utils::bat::output::PagingMode,
+};
 use bat::assets::HighlightingAssets;
 use console::Term;
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    convert::TryInto,
+    str::FromStr,
+};
 
-use crate::cli;
-use crate::config;
-use crate::env::DeltaEnv;
-use crate::errors::*;
-use crate::fatal;
-use crate::features;
-use crate::git_config::GitConfig;
-use crate::options::option_value::{OptionValue, ProvenancedOptionValue};
-use crate::options::theme;
-use crate::utils::bat::output::PagingMode;
+#[derive(Debug, thiserror::Error)]
+pub enum SetError {
+    #[error("--light and --dark cannot be used together.")]
+    LightDark,
+    #[error("Invalid value for width: {0}")]
+    InvalidWidth(String),
+    #[error("Error processing options.\nUnhandled names: {0:?}\nInvalid names: {1:?}")]
+    OptionProcessingError(HashSet<String>, HashSet<String>),
+    #[error(
+        r#"Invalid value for inspect-raw-lines option: {0}. Valid values are "true", and "false"."#
+    )]
+    InvalidRawLinesOption(String),
+    #[error(
+        r#"Invalid value for --paging option: {0} (valid values are "always", "never", and "auto")"#
+    )]
+    InvalidPagingOption(String),
+    #[error(
+        r#"Invalid value for --true-color option: {0} (valid values are "always", "never", and "auto")"#
+    )]
+    InvalidTrueColorOption(String),
+}
+
+type Result<T> = std::result::Result<T, SetError>;
 
 macro_rules! set_options {
     ([$( $field_ident:ident ),* ],
@@ -51,16 +75,16 @@ macro_rules! set_options {
                 "light",
                 "syntax-theme",
             ]);
+
             let expected_option_names: HashSet<_> = $expected_option_name_map
                 .values()
                 .map(String::as_str)
                 .collect();
 
             if option_names != expected_option_names {
-                $crate::config::delta_unreachable(
-                    &format!("Error processing options.\nUnhandled names: {:?}\nInvalid names: {:?}.\n",
-                             &expected_option_names - &option_names,
-                             &option_names - &expected_option_names));
+                Err(SetError::OptionProcessingError(
+                             (&expected_option_names - &option_names).into_iter().map(String::from).collect(),
+                             (&option_names - &expected_option_names).into_iter().map(String::from).collect()))?
             }
         }
     }
@@ -71,7 +95,7 @@ pub fn set_options(
     git_config: &mut Option<GitConfig>,
     arg_matches: &clap::ArgMatches,
     assets: HighlightingAssets,
-) {
+) -> Result<()> {
     if let Some(git_config) = git_config {
         if opt.no_gitconfig {
             git_config.enabled = false;
@@ -97,7 +121,7 @@ pub fn set_options(
     opt.features = Some(features.join(" "));
 
     // Set light, dark, and syntax-theme.
-    set__light__dark__syntax_theme__options(opt, git_config, arg_matches, &option_names);
+    set__light__dark__syntax_theme__options(opt, git_config, arg_matches, &option_names)?;
 
     // HACK: make minus-line styles have syntax-highlighting iff side-by-side.
     if features.contains(&"side-by-side".to_string()) {
@@ -235,12 +259,11 @@ pub fn set_options(
     );
 
     // Setting ComputedValues
-    set_widths_and_isatty(opt);
-    set_true_color(opt);
+    set_widths_and_isatty(opt)?;
+    set_true_color(opt)?;
     theme::set__color_mode__syntax_theme__syntax_set(opt, assets);
-    opt.computed.inspect_raw_lines =
-        cli::InspectRawLines::from_str(&opt.inspect_raw_lines).unwrap();
-    opt.computed.paging_mode = parse_paging_mode(&opt.paging_mode);
+    opt.computed.inspect_raw_lines = cli::InspectRawLines::from_str(&opt.inspect_raw_lines)?;
+    opt.computed.paging_mode = PagingMode::from_str(&opt.paging_mode)?;
 
     // --color-only is used for interactive.diffFilter (git add -p). side-by-side, and
     // **-decoration-style cannot be used there (does not emit lines in 1-1 correspondence with raw git output).
@@ -251,6 +274,8 @@ pub fn set_options(
         opt.commit_decoration_style = "none".to_string();
         opt.hunk_header_decoration_style = "none".to_string();
     }
+
+    Ok(())
 }
 
 #[allow(non_snake_case)]
@@ -259,14 +284,13 @@ fn set__light__dark__syntax_theme__options(
     git_config: &mut Option<GitConfig>,
     arg_matches: &clap::ArgMatches,
     option_names: &HashMap<String, String>,
-) {
-    let validate_light_and_dark = |opt: &cli::Opt| {
-        if opt.light && opt.dark {
-            fatal("--light and --dark cannot be used together.");
-        }
-    };
+) -> Result<()> {
     let empty_builtin_features = HashMap::new();
-    validate_light_and_dark(opt);
+
+    if opt.light && opt.dark {
+        Err(SetError::LightDark)?
+    }
+
     if !(opt.light || opt.dark) {
         set_options!(
             [dark, light],
@@ -278,7 +302,11 @@ fn set__light__dark__syntax_theme__options(
             false
         );
     }
-    validate_light_and_dark(opt);
+
+    if opt.light && opt.dark {
+        Err(SetError::LightDark)?
+    }
+
     set_options!(
         [syntax_theme],
         opt,
@@ -288,6 +316,8 @@ fn set__light__dark__syntax_theme__options(
         option_names,
         false
     );
+
+    Ok(())
 }
 
 // Features are processed differently from all other options. The role of this function is to
@@ -531,53 +561,56 @@ fn split_feature_string(features: &str) -> impl Iterator<Item = &str> {
 }
 
 impl FromStr for cli::InspectRawLines {
-    type Err = Error;
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    type Err = SetError;
+
+    fn from_str(s: &str) -> Result<Self> {
         match s.to_lowercase().as_str() {
             "true" => Ok(Self::True),
             "false" => Ok(Self::False),
-            _ => {
-                fatal(format!(
-                    r#"Invalid value for inspect-raw-lines option: {s}. Valid values are "true", and "false"."#,
-                ));
-            }
+            _ => Err(SetError::InvalidRawLinesOption(s.to_string())),
         }
     }
 }
 
-fn parse_paging_mode(paging_mode_string: &str) -> PagingMode {
-    match paging_mode_string.to_lowercase().as_str() {
-        "always" => PagingMode::Always,
-        "never" => PagingMode::Never,
-        "auto" => PagingMode::QuitIfOneScreen,
-        _ => {
-            fatal(format!(
-                "Invalid value for --paging option: {paging_mode_string} (valid values are \"always\", \"never\", and \"auto\")",
-            ));
+impl FromStr for PagingMode {
+    type Err = SetError;
+
+    fn from_str(paging_mode_string: &str) -> Result<Self> {
+        match paging_mode_string.to_lowercase().as_str() {
+            "always" => Ok(PagingMode::Always),
+            "never" => Ok(PagingMode::Never),
+            "auto" => Ok(PagingMode::QuitIfOneScreen),
+            _ => Err(SetError::InvalidPagingOption(
+                paging_mode_string.to_string(),
+            )),
         }
     }
 }
 
-fn parse_width_specifier(width_arg: &str, terminal_width: usize) -> Result<usize, String> {
+fn parse_width_specifier(
+    width_arg: &str,
+    terminal_width: usize,
+) -> std::result::Result<usize, String> {
     let width_arg = width_arg.trim();
 
-    let parse = |width: &str, must_be_negative, subexpression| -> Result<isize, String> {
-        let remove_spaces = |s: &str| s.chars().filter(|c| c != &' ').collect::<String>();
-        match remove_spaces(width).parse() {
-            Ok(val) if must_be_negative && val > 0 => Err(()),
-            Err(_) => Err(()),
-            Ok(ok) => Ok(ok),
-        }
-        .map_err(|_| {
-            let pos = if must_be_negative { " negative" } else { "n" };
-            let subexpr = if subexpression {
-                format!(" (from {width_arg:?})")
-            } else {
-                "".into()
-            };
-            format!("{width:?}{subexpr} is not a{pos} integer")
-        })
-    };
+    let parse =
+        |width: &str, must_be_negative, subexpression| -> std::result::Result<isize, String> {
+            let remove_spaces = |s: &str| s.chars().filter(|c| c != &' ').collect::<String>();
+            match remove_spaces(width).parse() {
+                Ok(val) if must_be_negative && val > 0 => Err(()),
+                Err(_) => Err(()),
+                Ok(ok) => Ok(ok),
+            }
+            .map_err(|_| {
+                let pos = if must_be_negative { " negative" } else { "n" };
+                let subexpr = if subexpression {
+                    format!(" (from {width_arg:?})")
+                } else {
+                    "".into()
+                };
+                format!("{width:?}{subexpr} is not a{pos} integer")
+            })
+        };
 
     let width = match width_arg.find('-') {
         None => parse(width_arg, false, false)?.try_into().unwrap(),
@@ -602,7 +635,7 @@ fn parse_width_specifier(width_arg: &str, terminal_width: usize) -> Result<usize
     Ok(width)
 }
 
-fn set_widths_and_isatty(opt: &mut cli::Opt) {
+fn set_widths_and_isatty(opt: &mut cli::Opt) -> Result<()> {
     let term_stdout = Term::stdout();
     opt.computed.stdout_is_term = term_stdout.is_term();
 
@@ -616,7 +649,7 @@ fn set_widths_and_isatty(opt: &mut cli::Opt) {
         Some("variable") => (cli::Width::Variable, false),
         Some(width) => {
             let width = parse_width_specifier(width, opt.computed.available_terminal_width)
-                .unwrap_or_else(|err| fatal(format!("Invalid value for width: {err}")));
+                .map_err(SetError::InvalidWidth)?;
             (cli::Width::Fixed(width), true)
         }
         None => {
@@ -637,9 +670,11 @@ fn set_widths_and_isatty(opt: &mut cli::Opt) {
     opt.computed.decorations_width = decorations_width;
     opt.computed.background_color_extends_to_terminal_width =
         background_color_extends_to_terminal_width;
+
+    Ok(())
 }
 
-fn set_true_color(opt: &mut cli::Opt) {
+fn set_true_color(opt: &mut cli::Opt) -> Result<()> {
     if opt.true_color == "auto" {
         // It's equal to its default, so the user might be using the deprecated
         // --24-bit-color option.
@@ -652,13 +687,10 @@ fn set_true_color(opt: &mut cli::Opt) {
         "always" => true,
         "never" => false,
         "auto" => is_truecolor_terminal(&opt.env),
-        _ => {
-            fatal(format!(
-                "Invalid value for --true-color option: {} (valid values are \"always\", \"never\", and \"auto\")",
-                opt.true_color
-            ));
-        }
+        _ => Err(SetError::InvalidTrueColorOption(opt.true_color.clone()))?,
     };
+
+    Ok(())
 }
 
 fn is_truecolor_terminal(env: &DeltaEnv) -> bool {
@@ -672,9 +704,7 @@ fn is_truecolor_terminal(env: &DeltaEnv) -> bool {
 pub mod tests {
     use std::fs::remove_file;
 
-    use crate::cli;
-    use crate::tests::integration_test_utils;
-    use crate::utils::bat::output::PagingMode;
+    use crate::{cli, tests::integration_test_utils, utils::bat::output::PagingMode};
 
     pub const TERMINAL_WIDTH_IN_TESTS: usize = 43;
 
@@ -753,11 +783,12 @@ pub mod tests {
         // TODO: should set_options not be called on any feature flags?
         // assert_eq!(opt.diff_highlight, true);
         // assert_eq!(opt.diff_so_fancy, true);
-        assert!(opt
-            .features
-            .unwrap()
-            .split_whitespace()
-            .any(|s| s == "xxxyyyzzz"));
+        assert!(
+            opt.features
+                .unwrap()
+                .split_whitespace()
+                .any(|s| s == "xxxyyyzzz")
+        );
         assert_eq!(opt.file_added_label, "xxxyyyzzz");
         assert_eq!(opt.file_decoration_style, "black black");
         assert_eq!(opt.file_modified_label, "xxxyyyzzz");
@@ -834,9 +865,11 @@ pub mod tests {
         let term_width = 12;
 
         let assert_failure_containing = |x, errmsg| {
-            assert!(parse_width_specifier(x, term_width)
-                .unwrap_err()
-                .contains(errmsg));
+            assert!(
+                parse_width_specifier(x, term_width)
+                    .unwrap_err()
+                    .contains(errmsg)
+            );
         };
 
         assert_failure_containing("", "is not an integer");

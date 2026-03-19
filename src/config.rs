@@ -2,22 +2,23 @@ use crate::{
     ansi, cli,
     color::{self, ColorMode},
     delta::State,
-    errors::Result,
-    fatal,
+    delta_unreachable,
+    errors::{Error, Result},
     features::{
         navigate,
         side_by_side::{self, LeftRight, ansifill},
     },
     git_config::GitConfig,
-    handlers,
-    handlers::blame::{BlameLineNumbers, parse_blame_line_numbers},
+    handlers::{
+        self,
+        blame::{BlameLineNumbers, parse_blame_line_numbers},
+    },
     minusplus::MinusPlus,
     paint::BgFillMethod,
-    parse_styles, style,
-    style::Style,
+    parse_styles,
+    style::{self, Style},
     tests::TESTING,
-    utils,
-    utils::{bat::output::PagingMode, regex_replacement::RegexReplacement},
+    utils::{self, bat::output::PagingMode, regex_replacement::RegexReplacement},
     wrapping::WrapConfig,
 };
 use clap::parser::ValueSource;
@@ -186,8 +187,8 @@ impl TryFrom<cli::Opt> for Config {
     type Error = crate::errors::Error;
 
     fn try_from(opt: cli::Opt) -> Result<Self> {
-        let mut styles = parse_styles::parse_styles(&opt);
-        let styles_map = parse_styles::parse_styles_map(&opt);
+        let mut styles = parse_styles::parse_styles(&opt)?;
+        let styles_map = parse_styles::parse_styles_map(&opt)?;
 
         let wrap_config = WrapConfig::from_opt(&opt, styles["inline-hint-style"])?;
 
@@ -198,28 +199,16 @@ impl TryFrom<cli::Opt> for Config {
             .map(|s| s.parse::<f64>().unwrap_or(0.0))
             .unwrap_or(0.0);
 
-        let commit_regex = Regex::new(&opt.commit_regex).unwrap_or_else(|_| {
-            fatal(format!(
-                "Invalid commit-regex: {}. \
-                 The value must be a valid Rust regular expression. \
-                 See https://docs.rs/regex.",
-                opt.commit_regex
-            ));
-        });
+        let commit_regex = Regex::new(&opt.commit_regex)
+            .map_err(|_| Error::CommitRegexInvalid(opt.commit_regex.clone()))?;
 
-        let tokenization_regex = Regex::new(&opt.tokenization_regex).unwrap_or_else(|_| {
-            fatal(format!(
-                "Invalid word-diff-regex: {}. \
-                 The value must be a valid Rust regular expression. \
-                 See https://docs.rs/regex.",
-                opt.tokenization_regex
-            ));
-        });
+        let tokenization_regex = Regex::new(&opt.tokenization_regex)
+            .map_err(|_| Error::WordDiffRegexInvalid(opt.tokenization_regex.clone()))?;
 
         let blame_palette = make_blame_palette(opt.blame_palette, opt.computed.color_mode);
 
         if blame_palette.is_empty() {
-            fatal("Option 'blame-palette' must not be empty.")
+            Err(Error::EmptyBlamePalette)?
         }
 
         let file_added_label = opt.file_added_label;
@@ -234,7 +223,7 @@ impl TryFrom<cli::Opt> for Config {
             // Note that "default" is not documented
             Some("ansi") | Some("default") | None => BgFillMethod::TryAnsiSequence,
             Some("spaces") => BgFillMethod::Spaces,
-            _ => fatal("Invalid option for line-fill-method: Expected \"ansi\" or \"spaces\"."),
+            _ => Err(Error::LineFillMethodInvalid)?,
         };
 
         let side_by_side_data = if opt.side_by_side && !handlers::hunk::is_word_diff() {
@@ -271,7 +260,7 @@ impl TryFrom<cli::Opt> for Config {
             Some("ripgrep") => Some(GrepType::Ripgrep),
             Some("classic") => Some(GrepType::Classic),
             None => None,
-            _ => fatal("Invalid option for grep-output-type: Expected \"ripgrep\" or \"classic\"."),
+            _ => Err(Error::GrepOutputTypeInvalid)?,
         };
 
         #[cfg(not(test))]
@@ -294,7 +283,7 @@ impl TryFrom<cli::Opt> for Config {
             blame_format: opt.blame_format,
             blame_code_style: styles.remove("blame-code-style"),
             blame_palette,
-            blame_separator_format: parse_blame_line_numbers(&opt.blame_separator_format),
+            blame_separator_format: parse_blame_line_numbers(&opt.blame_separator_format)?,
             blame_separator_style: styles.remove("blame-separator-style"),
             blame_timestamp_format: opt.blame_timestamp_format,
             blame_timestamp_output_format: opt.blame_timestamp_output_format,
@@ -463,13 +452,6 @@ fn make_blame_palette(blame_palette: Option<String>, mode: ColorMode) -> Vec<Str
 /// Did the user supply `option` on the command line?
 pub fn user_supplied_option(option: &str, arg_matches: &clap::ArgMatches) -> bool {
     arg_matches.value_source(option) == Some(ValueSource::CommandLine)
-}
-
-pub fn delta_unreachable(message: &str) -> ! {
-    fatal(format!(
-        "{message} This should not be possible. \
-         Please report the bug at https://github.com/dandavison/delta/issues.",
-    ));
 }
 
 #[cfg(test)]

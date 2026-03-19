@@ -1,25 +1,27 @@
-use std::collections::{HashMap, HashSet};
-use std::ffi::OsString;
-use std::path::{Path, PathBuf};
-
+use crate::{
+    ansi::{ANSI_SGR_BOLD, ANSI_SGR_RESET, ANSI_SGR_UNDERLINE},
+    color::ColorMode,
+    delta_unreachable,
+    env::DeltaEnv,
+    errors::Result,
+    git_config::GitConfig,
+    options, subcommands, utils,
+    utils::bat::output::PagingMode,
+};
 use bat::assets::HighlightingAssets;
-use clap::error::Error;
-use clap::{ArgMatches, ColorChoice, CommandFactory, FromArgMatches, Parser, ValueEnum, ValueHint};
+use clap::{
+    ArgMatches, ColorChoice, CommandFactory, FromArgMatches, Parser, ValueEnum, ValueHint,
+    error::Error,
+};
 use clap_complete::Shell;
 use console::Term;
 use lazy_static::lazy_static;
-use syntect::highlighting::Theme as SyntaxTheme;
-use syntect::parsing::SyntaxSet;
-
-use crate::ansi::{ANSI_SGR_BOLD, ANSI_SGR_RESET, ANSI_SGR_UNDERLINE};
-use crate::color::ColorMode;
-use crate::config::delta_unreachable;
-use crate::env::DeltaEnv;
-use crate::git_config::GitConfig;
-use crate::options;
-use crate::subcommands;
-use crate::utils;
-use crate::utils::bat::output::PagingMode;
+use std::{
+    collections::{HashMap, HashSet},
+    ffi::OsString,
+    path::{Path, PathBuf},
+};
+use syntect::{highlighting::Theme as SyntaxTheme, parsing::SyntaxSet};
 
 const TERM_FALLBACK_WIDTH: usize = 79;
 
@@ -1307,7 +1309,7 @@ impl Opt {
         args: Vec<OsString>,
         env: &DeltaEnv,
         assets: HighlightingAssets,
-    ) -> (Call<()>, Option<Opt>) {
+    ) -> Result<(Call<()>, Option<Opt>)> {
         #[cfg(test)]
         // Set argv[0] when called in tests:
         let args = {
@@ -1319,32 +1321,32 @@ impl Opt {
             Call::Delta(t) => (t, Call::Delta(())),
             Call::DeltaDiff(t, a, b) => (t, Call::DeltaDiff((), a, b)),
             Call::SubCommand(t, cmd) => (t, Call::SubCommand((), cmd)),
-            Call::Help(help) => return (Call::Help(help), None),
-            Call::Version(ver) => return (Call::Version(ver), None),
+            Call::Help(help) => return Ok((Call::Help(help), None)),
+            Call::Version(ver) => return Ok((Call::Version(ver), None)),
         };
 
         let mut final_config = if *matches.get_one::<bool>("no_gitconfig").unwrap_or(&false) {
             None
         } else {
-            GitConfig::try_create(env)
+            GitConfig::try_create(env)?
         };
 
         if let Some(path) = matches.get_one::<String>("config") {
             if !path.is_empty() {
                 let path = Path::new(path);
-                final_config = Some(GitConfig::from_path(env, path, true));
+                final_config = Some(GitConfig::from_path(env, path, true)?);
             }
         }
 
-        let opt = Self::from_clap_and_git_config(env, matches, final_config, assets);
-        (call, Some(opt))
+        let opt = Self::from_clap_and_git_config(env, matches, final_config, assets)?;
+        Ok((call, Some(opt)))
     }
 
     pub fn from_iter_and_git_config<I>(
         env: &DeltaEnv,
         iter: I,
         git_config: Option<GitConfig>,
-    ) -> Self
+    ) -> Result<Self>
     where
         I: IntoIterator,
         I::Item: Into<OsString> + Clone,
@@ -1363,13 +1365,13 @@ impl Opt {
         arg_matches: clap::ArgMatches,
         mut git_config: Option<GitConfig>,
         assets: HighlightingAssets,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut opt = Opt::from_arg_matches(&arg_matches)
             .unwrap_or_else(|_| delta_unreachable("Opt::from_arg_matches failed"));
         opt.env = env.clone();
-        options::set::set_options(&mut opt, &mut git_config, &arg_matches, assets);
+        options::set::set_options(&mut opt, &mut git_config, &arg_matches, assets)?;
         opt.git_config = git_config;
-        opt
+        Ok(opt)
     }
 
     pub fn get_argument_and_option_names() -> HashMap<String, String> {

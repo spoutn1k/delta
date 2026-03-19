@@ -1,20 +1,21 @@
+use crate::{
+    ansi::measure_text_width,
+    color, config,
+    delta::{self, State, StateMachine},
+    delta_unreachable,
+    errors::{Error, Result},
+    format::{
+        self, FormatStringSimple, Placeholder, make_placeholder_regex, parse_line_number_format,
+    },
+    paint::{self, BgShouldFill, StyleSectionSpecifier},
+    style::Style,
+    utils::process,
+};
 use chrono::{DateTime, FixedOffset};
 use lazy_static::lazy_static;
 use regex::Regex;
 use std::borrow::Cow;
 use unicode_width::UnicodeWidthStr;
-
-use crate::ansi::measure_text_width;
-use crate::color;
-use crate::config;
-use crate::config::delta_unreachable;
-use crate::delta::{self, State, StateMachine};
-use crate::fatal;
-use crate::format::{self, FormatStringSimple, Placeholder};
-use crate::format::{make_placeholder_regex, parse_line_number_format};
-use crate::paint::{self, BgShouldFill, StyleSectionSpecifier};
-use crate::style::Style;
-use crate::utils::process;
 
 #[derive(Clone, Debug)]
 pub enum BlameLineNumbers {
@@ -28,7 +29,7 @@ impl StateMachine<'_> {
     /// If this is a line of git blame output then render it accordingly. If
     /// this is the first blame line, then set the syntax-highlighter language
     /// according to delta.default-language.
-    pub fn handle_blame_line(&mut self) -> std::io::Result<bool> {
+    pub fn handle_blame_line(&mut self) -> Result<bool> {
         // TODO: It should be possible to eliminate some of the .clone()s and
         // .to_owned()s.
         let mut handled_line = false;
@@ -56,7 +57,7 @@ impl StateMachine<'_> {
                         " ".repeat(measure_text_width(&formatted_blame_metadata))
                 };
                 let metadata_style =
-                    self.blame_metadata_style(&key, previous_key.as_deref(), is_repeat);
+                    self.blame_metadata_style(&key, previous_key.as_deref(), is_repeat)?;
                 let code_style = self.config.blame_code_style.unwrap_or(metadata_style);
                 let separator_style = self.config.blame_separator_style.unwrap_or(code_style);
 
@@ -105,7 +106,7 @@ impl StateMachine<'_> {
         key: &str,
         previous_key: Option<&str>,
         is_repeat: bool,
-    ) -> Style {
+    ) -> Result<Style> {
         let mut style = match paint::parse_style_sections(&self.raw_line, self.config).first() {
             Some((style, _)) if style != &Style::default() => {
                 // Something like `blame.coloring = highlightRecent` is in effect; honor
@@ -121,7 +122,7 @@ impl StateMachine<'_> {
                 // borrow checker won't permit that.
                 let style = Style::from_colors(
                     None,
-                    color::parse_color(&color, true, self.config.git_config()),
+                    color::parse_color(&color, true, self.config.git_config())?,
                 );
                 self.blame_key_colors.insert(key.to_owned(), color);
                 style
@@ -129,7 +130,7 @@ impl StateMachine<'_> {
         };
 
         style.is_syntax_highlighted = true;
-        style
+        Ok(style)
     }
 
     fn get_color(&self, this_key: &str, previous_key: Option<&str>, is_repeat: bool) -> String {
@@ -330,16 +331,16 @@ pub fn format_blame_line_number(
     (format.prefix.as_str(), result, format.suffix.as_str())
 }
 
-pub fn parse_blame_line_numbers(arg: &str) -> BlameLineNumbers {
+pub fn parse_blame_line_numbers(arg: &str) -> Result<BlameLineNumbers> {
     if arg == "none" {
-        return BlameLineNumbers::On(crate::format::FormatStringSimple::only_string("│"));
+        return Ok(BlameLineNumbers::On(
+            crate::format::FormatStringSimple::only_string("│"),
+        ));
     }
 
     let regex = make_placeholder_regex(&["n"]);
     let f = match parse_line_number_format(arg, &regex, false) {
-        v if v.len() > 1 => {
-            fatal("Too many format arguments numbers for blame-line-numbers".to_string())
-        }
+        v if v.len() > 1 => Err(Error::BlameFormatCountError)?,
         mut v => v.pop().unwrap(),
     };
 
@@ -351,43 +352,36 @@ pub fn parse_blame_line_numbers(arg: &str) -> BlameLineNumbers {
     };
 
     if f.placeholder.is_none() {
-        return BlameLineNumbers::On(crate::format::FormatStringSimple::only_string(
-            f.suffix.as_str(),
+        return Ok(BlameLineNumbers::On(
+            crate::format::FormatStringSimple::only_string(f.suffix.as_str()),
         ));
     }
 
     match f.fmt_type.as_str() {
-        t if t.is_empty() || t == "every" => BlameLineNumbers::On(set_defaults(f.into_simple())),
-        "block" => BlameLineNumbers::PerBlock(set_defaults(f.into_simple())),
+        t if t.is_empty() || t == "every" => {
+            Ok(BlameLineNumbers::On(set_defaults(f.into_simple())))
+        }
+        "block" => Ok(BlameLineNumbers::PerBlock(set_defaults(f.into_simple()))),
         every_n if every_n.starts_with("every-") => {
             let n = every_n["every-".len()..]
                 .parse::<usize>()
-                .unwrap_or_else(|err| {
-                    fatal(format!(
-                        "Invalid number for blame-line-numbers in every-N argument: {err}",
-                    ))
-                });
-
+                .map_err(Error::BlameFormatInvalidNumber)?;
             if n > 1 {
-                BlameLineNumbers::Every(n, set_defaults(f.into_simple()))
+                Ok(BlameLineNumbers::Every(n, set_defaults(f.into_simple())))
             } else {
-                BlameLineNumbers::On(set_defaults(f.into_simple()))
+                Ok(BlameLineNumbers::On(set_defaults(f.into_simple())))
             }
         }
-        t => fatal(format!(
-            "Invalid format type \"{t}\" for blame-line-numbers",
-        )),
+        t => Err(Error::BlameFormatInvalidFormat(t.to_owned())),
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::tests::integration_test_utils;
     use itertools::Itertools;
     use std::{collections::HashMap, io::Cursor};
-
-    use crate::tests::integration_test_utils;
-
-    use super::*;
 
     #[test]
     fn test_blame_line_regex() {
@@ -404,8 +398,7 @@ mod tests {
 
     #[test]
     fn test_blame_line_with_parens_in_name() {
-        let line =
-            "61f180c8 (Kangwook Lee (이강욱) 2021-06-09 23:33:59 +0900 130)     let mut output_type =";
+        let line = "61f180c8 (Kangwook Lee (이강욱) 2021-06-09 23:33:59 +0900 130)     let mut output_type =";
         let caps = BLAME_LINE_REGEX.captures(line).unwrap();
         assert_eq!(caps.get(2).unwrap().as_str(), "Kangwook Lee (이강욱)");
     }

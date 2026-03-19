@@ -1,17 +1,16 @@
-use std::io::Write;
-
-use itertools::Itertools;
-
 use crate::{
     cli, config,
+    errors::Result,
     features::side_by_side::{Left, Right},
     minusplus::*,
     paint::BgFillMethod,
     style,
     utils::bat::output::PagingMode,
 };
+use itertools::Itertools;
+use std::io::Write;
 
-pub fn show_config(config: &config::Config, writer: &mut dyn Write) -> std::io::Result<()> {
+pub fn show_config(config: &config::Config, writer: &mut dyn Write) -> Result<()> {
     // styles first
     writeln!(
         writer,
@@ -35,6 +34,8 @@ pub fn show_config(config: &config::Config, writer: &mut dyn Write) -> std::io::
             .blame_palette
             .iter()
             .map(|s| style::paint_color_string(s, config.true_color, config.git_config()))
+            .collect::<Result<Vec<_>>>()?
+            .into_iter()
             .join(" "),
         commit_style = config.commit_style.to_painted_string(),
         file_style = config.file_style.to_painted_string(),

@@ -1,17 +1,20 @@
 use crate::{
     cli,
-    color::{ColorMode, ColorMode::*},
+    color::ColorMode::{self, *},
     config, delta,
     env::DeltaEnv,
-    errors::Result,
+    errors::{Error, Result},
     options::theme::color_mode_from_syntax_theme,
-    utils,
-    utils::bat::output::{OutputType, PagingMode},
+    utils::{
+        self,
+        bat::output::{OutputType, PagingMode},
+    },
 };
+use bytelines::ByteLines;
 use clap::Parser;
 use std::{
     convert::TryFrom as _,
-    io::{self, ErrorKind, IsTerminal, Read, Write},
+    io::{self, BufReader, ErrorKind, IsTerminal, Read, Write},
 };
 
 #[cfg(not(tarpaulin_include))]
@@ -59,8 +62,6 @@ fn _show_syntax_themes(
     writer: &mut dyn Write,
     stdin: Option<&Vec<u8>>,
 ) -> Result<()> {
-    use bytelines::ByteLines;
-    use std::io::BufReader;
     let input = match stdin {
         Some(stdin_data) => &stdin_data[..],
         None => {
@@ -97,7 +98,7 @@ index f38589a..0f1bb83 100644
             title_style.paint(syntax_theme)
         )?;
         config.syntax_theme = Some(assets.get_theme(syntax_theme).clone());
-        if let Err(error) =
+        if let Err(Error::Io(error)) =
             delta::delta(ByteLines::new(BufReader::new(&input[0..])), writer, &config)
         {
             match error.kind() {

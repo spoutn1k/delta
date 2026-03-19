@@ -1,8 +1,6 @@
 use std::collections::HashMap;
 
-use crate::cli;
-use crate::git_config::GitConfig;
-use crate::options::option_value::ProvenancedOptionValue;
+use crate::{cli, git_config::GitConfig, options::option_value::ProvenancedOptionValue};
 use ProvenancedOptionValue::*;
 
 /// A custom feature is a named set of command line (option, value) pairs, supplied in a git config
@@ -90,20 +88,19 @@ pub mod side_by_side;
 
 #[cfg(test)]
 pub mod tests {
-    use std::collections::HashSet;
-    use std::fs::remove_file;
+    use std::{collections::HashSet, fs::remove_file};
 
-    use crate::cli;
-    use crate::env::DeltaEnv;
-    use crate::features::make_builtin_features;
-    use crate::tests::integration_test_utils::make_options_from_args_and_git_config;
+    use crate::{
+        cli, env::DeltaEnv, features::make_builtin_features,
+        tests::integration_test_utils::make_options_from_args_and_git_config,
+    };
 
     #[test]
     fn test_builtin_features_have_flags_and_these_set_features() {
         let builtin_features = make_builtin_features();
         let mut args = vec!["delta".to_string()];
         args.extend(builtin_features.keys().map(|s| format!("--{s}")));
-        let opt = cli::Opt::from_iter_and_git_config(&DeltaEnv::default(), args, None);
+        let opt = cli::Opt::from_iter_and_git_config(&DeltaEnv::default(), args, None).unwrap();
         let features: HashSet<&str> = opt
             .features
             .as_deref()
@@ -176,8 +173,7 @@ pub mod tests {
 [delta]
     features = my-feature
 ";
-        let git_config_path =
-            "delta__test_feature_flag_on_command_line_does_not_replace_features_in_gitconfig.gitconfig";
+        let git_config_path = "delta__test_feature_flag_on_command_line_does_not_replace_features_in_gitconfig.gitconfig";
         assert_eq!(
             make_options_from_args_and_git_config(
                 &["--navigate", "--raw"],

@@ -3,11 +3,9 @@ use git_delta::{
     cli,
     cli::Call,
     config,
-    config::delta_unreachable,
     delta::delta,
-    env,
+    delta_unreachable, env,
     errors::{Error, Result},
-    fatal,
     subcommands::{self, SubCmdKind, SubCommand},
     utils,
     utils::bat::{
@@ -46,7 +44,7 @@ fn main() -> Result<()> {
 pub fn run_app(args: Vec<OsString>, capture_output: Option<&mut Cursor<Vec<u8>>>) -> Result<i32> {
     let env = env::DeltaEnv::init();
     let assets = utils::bat::assets::load_highlighting_assets();
-    let (call, opt) = cli::Opt::from_args_and_git_config(args, &env, assets);
+    let (call, opt) = cli::Opt::from_args_and_git_config(args, &env, assets)?;
 
     if let Call::Version(msg) = call {
         writeln!(std::io::stdout(), "{}", msg.trim_end())?;
@@ -90,13 +88,12 @@ pub fn run_app(args: Vec<OsString>, capture_output: Option<&mut Cursor<Vec<u8>>>
         None
     };
     if let Some(result) = subcommand_result {
-        if let Err(error) = result {
-            match error {
-                Error::Io(ioerr) if ioerr.kind() == ErrorKind::BrokenPipe => {}
-                _ => fatal(format!("{error}")),
-            }
-        }
-        return Ok(0);
+        return result
+            .or_else(|e| match e {
+                Error::Io(ioerr) if ioerr.kind() == ErrorKind::BrokenPipe => Ok(()),
+                _ => Err(e),
+            })
+            .map(|_| 0);
     };
 
     let _show_config = opt.show_config;
@@ -151,7 +148,7 @@ pub fn run_app(args: Vec<OsString>, capture_output: Option<&mut Cursor<Vec<u8>>>
 
         let res = delta(io::stdin().lock().byte_lines(), &mut writer, &config);
 
-        if let Err(error) = res {
+        if let Err(Error::Io(error)) = res {
             match error.kind() {
                 ErrorKind::BrokenPipe => return Ok(0),
                 _ => {
@@ -197,7 +194,7 @@ pub fn run_app(args: Vec<OsString>, capture_output: Option<&mut Cursor<Vec<u8>>>
 
         let res = delta(cmd_stdout_buf.byte_lines(), &mut writer, &config);
 
-        if let Err(error) = res {
+        if let Err(Error::Io(error)) = res {
             let _ = cmd.wait(); // for clippy::zombie_processes
             match error.kind() {
                 ErrorKind::BrokenPipe => return Ok(0),

@@ -1,13 +1,16 @@
 #[cfg(test)]
 mod tests {
-    use crate::ansi::{self, strip_ansi_codes};
-    use crate::cli::InspectRawLines;
-    use crate::delta::{DiffType, State};
-    use crate::handlers::hunk_header::ParsedHunkHeader;
-    use crate::style;
-    use crate::tests::ansi_test_utils::ansi_test_utils;
-    use crate::tests::integration_test_utils;
-    use crate::tests::integration_test_utils::DeltaTest;
+    use crate::{
+        ansi::{self, strip_ansi_codes},
+        cli::InspectRawLines,
+        delta::{DiffType, State},
+        handlers::hunk_header::ParsedHunkHeader,
+        style,
+        tests::{
+            ansi_test_utils::ansi_test_utils, integration_test_utils,
+            integration_test_utils::DeltaTest,
+        },
+    };
     use insta::assert_snapshot;
 
     #[test]
@@ -306,7 +309,9 @@ index 0123456..1234567 100644
         let output =
             integration_test_utils::run_delta(TRIPLE_DASH_AT_BEGINNING_OF_LINE_IN_CODE, &config);
         let output = strip_ansi_codes(&output);
-        assert!(output.contains("-- instance (Category p, Category q) => Category (p ∧ q) where\n"));
+        assert!(
+            output.contains("-- instance (Category p, Category q) => Category (p ∧ q) where\n")
+        );
     }
 
     #[test]
@@ -1606,7 +1611,7 @@ src/align.rs:71: impl<'a> Alignment<'a> { │
         let output = integration_test_utils::run_delta(example_diff, &config);
         let line = output.lines().nth(8).unwrap();
         if base_style_has_background_color {
-            let style = style::Style::from_str(base_style, None, None, true, None);
+            let style = style::Style::from_str(base_style, None, None, true, None).unwrap();
             assert_eq!(
                 line,
                 &style

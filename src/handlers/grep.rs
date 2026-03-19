@@ -1,21 +1,21 @@
-use std::borrow::Cow;
-
+use super::hunk_header::HunkHeaderIncludeHunkLabel;
+use crate::{
+    ansi,
+    config::{
+        GrepType, HunkHeaderIncludeCodeFragment, HunkHeaderIncludeFilePath,
+        HunkHeaderIncludeLineNumber,
+    },
+    delta::{State, StateMachine},
+    delta_unreachable,
+    handlers::{self, ripgrep_json},
+    paint::{self, BgShouldFill, StyleSectionSpecifier},
+    style::Style,
+    utils::{process, tabs},
+};
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::Deserialize;
-
-use crate::ansi;
-use crate::config::{
-    delta_unreachable, GrepType, HunkHeaderIncludeCodeFragment, HunkHeaderIncludeFilePath,
-    HunkHeaderIncludeLineNumber,
-};
-use crate::delta::{State, StateMachine};
-use crate::handlers::{self, ripgrep_json};
-use crate::paint::{self, BgShouldFill, StyleSectionSpecifier};
-use crate::style::Style;
-use crate::utils::{process, tabs};
-
-use super::hunk_header::HunkHeaderIncludeHunkLabel;
+use std::borrow::Cow;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct GrepLine<'b> {
@@ -731,10 +731,10 @@ pub fn _parse_grep_line<'b>(regex: &Regex, line: &'b str) -> Option<GrepLine<'b>
 
 #[cfg(test)]
 mod tests {
-    use crate::handlers::grep::{
-        parse_grep_line, parse_raw_grep_line, GrepLine, GrepType, LineType,
+    use crate::{
+        handlers::grep::{GrepLine, GrepType, LineType, parse_grep_line, parse_raw_grep_line},
+        utils::process::tests::FakeParentArgs,
     };
-    use crate::utils::process::tests::FakeParentArgs;
 
     #[test]
     fn test_parse_grep_match() {
@@ -825,10 +825,11 @@ mod tests {
             ),
             Some(GrepLine {
                 grep_type: GrepType::Classic,
-                                path: "src/de lta.rs".into(),
+                path: "src/de lta.rs".into(),
                 line_number: None,
                 line_type: LineType::Match,
-                code: "    pub fn new(writer: &'a mut dyn Write, config: &'a Config) -> Self {".into(),
+                code: "    pub fn new(writer: &'a mut dyn Write, config: &'a Config) -> Self {"
+                    .into(),
                 submatches: None,
             })
         );
@@ -1226,10 +1227,10 @@ mod tests {
 
     #[test]
     fn test_get_code_style_sections() {
-        use crate::ansi::strip_ansi_codes;
-        use crate::handlers::grep::get_code_style_sections;
-        use crate::paint::StyleSectionSpecifier;
-        use crate::style::Style;
+        use crate::{
+            ansi::strip_ansi_codes, handlers::grep::get_code_style_sections,
+            paint::StyleSectionSpecifier, style::Style,
+        };
 
         let fake_parent_grep_command = "git --doesnt-matter grep --nor-this nor_this -- nor_this";
         let _args = FakeParentArgs::for_scope(fake_parent_grep_command);
@@ -1241,7 +1242,9 @@ mod tests {
         };
 
         let escape = "\x1B";
-        let working_example = format!("foo/bar/baz.yaml{escape}[36m:{escape}[m1090{escape}[36m:{escape}[m  - {escape}[1;31mkind: Service{escape}[mAccount");
+        let working_example = format!(
+            "foo/bar/baz.yaml{escape}[36m:{escape}[m1090{escape}[36m:{escape}[m  - {escape}[1;31mkind: Service{escape}[mAccount"
+        );
         let stripped = strip_ansi_codes(&working_example);
         let grep = parse_grep_line(&stripped).unwrap();
 
@@ -1254,7 +1257,9 @@ mod tests {
             ]))
         );
 
-        let broken_example = format!("foo/bar/baz.yaml{escape}[36m:{escape}[m2{escape}[36m:{escape}[m{escape}[1;31mkind: Service{escape}[m");
+        let broken_example = format!(
+            "foo/bar/baz.yaml{escape}[36m:{escape}[m2{escape}[36m:{escape}[m{escape}[1;31mkind: Service{escape}[m"
+        );
         let broken_stripped = strip_ansi_codes(&broken_example);
         let broken_grep = parse_grep_line(&broken_stripped).unwrap();
 
@@ -1272,7 +1277,9 @@ mod tests {
             )]))
         );
 
-        let plus_example = format!("etc/examples/189-merge-conflict.2.diff{escape}[36m:{escape}[m10{escape}[36m:{escape}[m{escape}[32m +        let (style, non_emph_style) = {escape}[1;31mmatch{escape}[m state {{{escape}[m");
+        let plus_example = format!(
+            "etc/examples/189-merge-conflict.2.diff{escape}[36m:{escape}[m10{escape}[36m:{escape}[m{escape}[32m +        let (style, non_emph_style) = {escape}[1;31mmatch{escape}[m state {{{escape}[m"
+        );
         let plus_stripped = strip_ansi_codes(&plus_example);
         let plus_grep = parse_grep_line(&plus_stripped).unwrap();
 
