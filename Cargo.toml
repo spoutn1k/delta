@@ -4,7 +4,7 @@ authors = ["Dan Davison <dandavison7@gmail.com>"]
 categories = ["command-line-utilities", "development-tools"]
 description = "A syntax-highlighting pager for git"
 documentation = "https://github.com/dandavison/delta"
-edition = "2018"
+edition = "2024"
 homepage = "https://github.com/dandavison/delta"
 license = "MIT"
 repository = "https://github.com/dandavison/delta"
@@ -21,7 +21,7 @@ path = "src/main.rs"
 [dependencies]
 ansi_colours = "1.2.1"
 ansi_term = "0.12.1"
-anstyle-parse = "0.2.3"
+anstyle-parse = "1.0.0"
 anyhow = "1.0.70"
 bat = { version = "0.26.0", default-features = false, features = [
   "minimal-application",
@@ -40,7 +40,7 @@ clap = { version = "4.3.14", features = [
   "usage",
   "error-context",
 ] }
-console = "0.15.0"
+console = "0.16.0"
 ctrlc = "3.2.5"
 dirs = "6.0.0"
 git2 = { version = "0.20.0", default-features = false, features = [] }

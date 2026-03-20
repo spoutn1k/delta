@@ -70,18 +70,31 @@ fn hostname() -> Option<String> {
 pub mod tests {
     use super::DeltaEnv;
     use lazy_static::lazy_static;
-    use std::env;
-    use std::sync::{Arc, Mutex};
+    use std::{
+        env,
+        ffi::OsStr,
+        sync::{Arc, Mutex},
+    };
 
     lazy_static! {
         static ref ENV_ACCESS: Arc<Mutex<()>> = Arc::new(Mutex::new(()));
+    }
+
+    fn set_env<K, V>(key: K, value: V)
+    where
+        K: AsRef<OsStr>,
+        V: AsRef<OsStr>,
+    {
+        unsafe {
+            env::set_var(key, value);
+        }
     }
 
     #[test]
     fn test_env_parsing() {
         let _guard = ENV_ACCESS.lock().unwrap();
         let feature = "Awesome Feature";
-        env::set_var("DELTA_FEATURES", feature);
+        set_env("DELTA_FEATURES", feature);
         let env = DeltaEnv::init();
         assert_eq!(env.features, Some(feature.into()));
         // otherwise `current_dir` is not used in the test cfg:
@@ -91,7 +104,7 @@ pub mod tests {
     #[test]
     fn test_env_parsing_with_pager_set_to_bat() {
         let _guard = ENV_ACCESS.lock().unwrap();
-        env::set_var("PAGER", "bat");
+        set_env("PAGER", "bat");
         let env = DeltaEnv::init();
         assert_eq!(
             env.pagers.1,
@@ -104,7 +117,7 @@ pub mod tests {
     #[test]
     fn test_env_parsing_with_pager_set_to_more() {
         let _guard = ENV_ACCESS.lock().unwrap();
-        env::set_var("PAGER", "more");
+        set_env("PAGER", "more");
         let env = DeltaEnv::init();
         assert_eq!(env.pagers.1, Some("less".into()));
     }
@@ -112,7 +125,7 @@ pub mod tests {
     #[test]
     fn test_env_parsing_with_pager_set_to_most() {
         let _guard = ENV_ACCESS.lock().unwrap();
-        env::set_var("PAGER", "most");
+        set_env("PAGER", "most");
         let env = DeltaEnv::init();
         assert_eq!(env.pagers.1, Some("less".into()));
     }
