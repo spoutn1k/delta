@@ -1,7 +1,10 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::delta::{State, StateMachine};
+use crate::{
+    delta::{State, StateMachine},
+    errors::Result,
+};
 
 impl StateMachine<'_> {
     #[inline]
@@ -9,7 +12,7 @@ impl StateMachine<'_> {
         self.line.starts_with("Submodule ")
     }
 
-    pub fn handle_submodule_log_line(&mut self) -> std::io::Result<bool> {
+    pub fn handle_submodule_log_line(&mut self) -> Result<bool> {
         if !self.test_submodule_log() {
             return Ok(false);
         }

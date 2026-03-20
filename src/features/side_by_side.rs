@@ -2,7 +2,8 @@ use crate::{
     ansi, cli,
     config::{self, Config},
     delta::{DiffType, State},
-    delta_unreachable, edits,
+    edits,
+    errors::{Error, Result},
     features::{OptionValueFunction, line_numbers},
     minusplus::*,
     paint::{BgFillMethod, BgShouldFill, LineSections, Painter},
@@ -117,7 +118,7 @@ pub fn paint_minus_and_plus_lines_side_by_side(
     line_numbers_data: &mut Option<LineNumbersData>,
     output_buffer: &mut String,
     config: &config::Config,
-) {
+) -> Result<()> {
     let line_states = LeftRight::new(
         lines[Left].iter().map(|(_, state)| state.clone()).collect(),
         lines[Right]
@@ -126,9 +127,7 @@ pub fn paint_minus_and_plus_lines_side_by_side(
             .collect(),
     );
 
-    let line_numbers_data = line_numbers_data
-        .as_mut()
-        .unwrap_or_else(|| delta_unreachable("side-by-side requires Some(line_numbers_data)"));
+    let line_numbers_data = line_numbers_data.as_mut().ok_or(Error::NoLineNumberData)?;
 
     let bg_should_fill = LeftRight::new(
         // Using an ANSI sequence to fill the left panel would not work.
@@ -220,6 +219,8 @@ pub fn paint_minus_and_plus_lines_side_by_side(
             _ => {}
         }
     }
+
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]

@@ -1,5 +1,8 @@
-use crate::delta::{DiffType, Source, State, StateMachine};
-use crate::utils::path::relativize_path_maybe;
+use crate::{
+    delta::{DiffType, Source, State, StateMachine},
+    errors::Result,
+    utils::path::relativize_path_maybe,
+};
 
 impl StateMachine<'_> {
     #[inline]
@@ -12,7 +15,7 @@ impl StateMachine<'_> {
         self.line.starts_with("Binary files ")
     }
 
-    pub fn handle_diff_header_misc_line(&mut self) -> std::io::Result<bool> {
+    pub fn handle_diff_header_misc_line(&mut self) -> Result<bool> {
         if !self.test_diff_file_missing() && !self.test_diff_is_binary() {
             return Ok(false);
         }

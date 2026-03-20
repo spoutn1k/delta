@@ -2,8 +2,7 @@ use crate::{
     ansi::measure_text_width,
     color, config,
     delta::{self, State, StateMachine},
-    delta_unreachable,
-    errors::{Error, Result},
+    errors::Result,
     format::{
         self, FormatStringSimple, Placeholder, make_placeholder_regex, parse_line_number_format,
     },
@@ -14,7 +13,7 @@ use crate::{
 use chrono::{DateTime, FixedOffset};
 use lazy_static::lazy_static;
 use regex::Regex;
-use std::borrow::Cow;
+use std::{borrow::Cow, num::ParseIntError};
 use unicode_width::UnicodeWidthStr;
 
 #[derive(Clone, Debug)]
@@ -23,6 +22,20 @@ pub enum BlameLineNumbers {
     On(FormatStringSimple),
     PerBlock(FormatStringSimple),
     Every(usize, FormatStringSimple),
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum BlameError {
+    #[error("There must be a previous key if the key has a color.")]
+    ColorInFirst,
+    #[error("is_repeat cannot be true when key has no color.")]
+    IsRepeatNoColor,
+    #[error("Invalid format type \"{0}\" for blame-line-numbers")]
+    BlameFormatInvalidFormat(String),
+    #[error("Invalid number for blame-line-numbers in every-N argument: {0}")]
+    BlameFormatInvalidNumber(ParseIntError),
+    #[error("Too many format arguments numbers for blame-line-numbers")]
+    BlameFormatCountError,
 }
 
 impl StateMachine<'_> {
@@ -78,7 +91,7 @@ impl StateMachine<'_> {
 
                 // Emit syntax-highlighted code
                 if self.state == State::Unknown {
-                    self.painter.set_syntax(self.get_filename().as_deref());
+                    self.painter.set_syntax(self.get_filename().as_deref())?;
                     self.painter.set_highlighter();
                 }
                 self.state = State::Blame(key);
@@ -115,7 +128,7 @@ impl StateMachine<'_> {
             }
             _ => {
                 // Compute the color ourselves.
-                let color = self.get_color(key, previous_key, is_repeat);
+                let color = self.get_color(key, previous_key, is_repeat)?;
                 // TODO: This will often be pointlessly updating a key with the
                 // value it already has. It might be nicer to do this (and
                 // compute the style) in get_color(), but as things stand the
@@ -133,14 +146,19 @@ impl StateMachine<'_> {
         Ok(style)
     }
 
-    fn get_color(&self, this_key: &str, previous_key: Option<&str>, is_repeat: bool) -> String {
+    fn get_color(
+        &self,
+        this_key: &str,
+        previous_key: Option<&str>,
+        is_repeat: bool,
+    ) -> Result<String> {
         // Determine color for this line
         let previous_key_color = match previous_key {
             Some(previous_key) => self.blame_key_colors.get(previous_key),
             None => None,
         };
 
-        match (
+        let color = match (
             self.blame_key_colors.get(this_key),
             previous_key_color,
             is_repeat,
@@ -169,11 +187,11 @@ impl StateMachine<'_> {
                     self.get_next_color(Some(key_color))
                 }
             }
-            (None, _, true) => delta_unreachable("is_repeat cannot be true when key has no color."),
-            (Some(_), None, _) => {
-                delta_unreachable("There must be a previous key if the key has a color.")
-            }
-        }
+            (None, _, true) => Err(BlameError::IsRepeatNoColor)?,
+            (Some(_), None, _) => Err(BlameError::ColorInFirst)?,
+        };
+
+        Ok(color)
     }
 
     fn get_next_color(&self, other_than_color: Option<&str>) -> String {
@@ -340,7 +358,7 @@ pub fn parse_blame_line_numbers(arg: &str) -> Result<BlameLineNumbers> {
 
     let regex = make_placeholder_regex(&["n"]);
     let f = match parse_line_number_format(arg, &regex, false) {
-        v if v.len() > 1 => Err(Error::BlameFormatCountError)?,
+        v if v.len() > 1 => Err(BlameError::BlameFormatCountError)?,
         mut v => v.pop().unwrap(),
     };
 
@@ -365,14 +383,14 @@ pub fn parse_blame_line_numbers(arg: &str) -> Result<BlameLineNumbers> {
         every_n if every_n.starts_with("every-") => {
             let n = every_n["every-".len()..]
                 .parse::<usize>()
-                .map_err(Error::BlameFormatInvalidNumber)?;
+                .map_err(BlameError::BlameFormatInvalidNumber)?;
             if n > 1 {
                 Ok(BlameLineNumbers::Every(n, set_defaults(f.into_simple())))
             } else {
                 Ok(BlameLineNumbers::On(set_defaults(f.into_simple())))
             }
         }
-        t => Err(Error::BlameFormatInvalidFormat(t.to_owned())),
+        t => Err(BlameError::BlameFormatInvalidFormat(t.to_owned()))?,
     }
 }
 
@@ -453,7 +471,7 @@ mod tests {
             "--blame-palette",
             "1 2",
         ]);
-        let mut machine = StateMachine::new(&mut writer, &config);
+        let mut machine = StateMachine::new(&mut writer, &config).unwrap();
 
         let blame_lines: HashMap<&str, &str> = vec![
             (

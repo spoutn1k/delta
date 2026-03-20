@@ -1,7 +1,6 @@
 use crate::{
     ansi::{ANSI_SGR_BOLD, ANSI_SGR_RESET, ANSI_SGR_UNDERLINE},
     color::ColorMode,
-    delta_unreachable,
     env::DeltaEnv,
     errors::Result,
     git_config::GitConfig,
@@ -1364,8 +1363,7 @@ impl Opt {
         mut git_config: Option<GitConfig>,
         assets: HighlightingAssets,
     ) -> Result<Self> {
-        let mut opt = Opt::from_arg_matches(&arg_matches)
-            .unwrap_or_else(|_| delta_unreachable("Opt::from_arg_matches failed"));
+        let mut opt = Opt::from_arg_matches(&arg_matches)?;
         opt.env = env.clone();
         options::set::set_options(&mut opt, &mut git_config, &arg_matches, assets)?;
         opt.git_config = git_config;

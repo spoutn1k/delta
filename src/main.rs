@@ -4,7 +4,7 @@ use git_delta::{
     cli::Call,
     config,
     delta::delta,
-    delta_unreachable, env,
+    env,
     errors::{Error, Result},
     subcommands::{self, SubCmdKind, SubCommand},
     utils,
@@ -19,6 +19,28 @@ use std::{
     io::{self, BufRead, Cursor, ErrorKind, IsTerminal, Write},
     process::{self, Command, Stdio},
 };
+
+fn delta_unreachable(message: &str) -> ! {
+    fn fatal<T>(errmsg: T) -> !
+    where
+        T: AsRef<str> + std::fmt::Display,
+    {
+        #[cfg(not(test))]
+        {
+            eprintln!("{errmsg}");
+            // As in Config::error_exit_code: use 2 for error
+            // because diff uses 0 and 1 for non-error.
+            std::process::exit(2);
+        }
+        #[cfg(test)]
+        panic!("{}\n", errmsg);
+    }
+
+    fatal(format!(
+        "{message} This should not be possible. \
+         Please report the bug at https://github.com/dandavison/delta/issues.",
+    ));
+}
 
 #[cfg(not(tarpaulin_include))]
 fn main() -> Result<()> {

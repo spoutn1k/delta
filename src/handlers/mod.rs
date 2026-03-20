@@ -15,10 +15,13 @@ pub mod merge_conflict;
 mod ripgrep_json;
 pub mod submodule;
 
-use crate::delta::{State, StateMachine};
+use crate::{
+    delta::{State, StateMachine},
+    errors::Result,
+};
 
 impl StateMachine<'_> {
-    pub fn handle_additional_cases(&mut self, to_state: State) -> std::io::Result<bool> {
+    pub fn handle_additional_cases(&mut self, to_state: State) -> Result<bool> {
         let mut handled_line = false;
 
         // Additional cases:
@@ -36,9 +39,9 @@ impl StateMachine<'_> {
         // See https://github.com/dandavison/delta/issues/60#issuecomment-557485242 for a
         // proposal for more robust parsing logic.
 
-        self.painter.paint_buffered_minus_and_plus_lines();
+        self.painter.paint_buffered_minus_and_plus_lines()?;
         self.state = to_state;
-        if self.should_handle() {
+        if self.should_handle()? {
             self.painter.emit()?;
             diff_header::write_generic_diff_header_header_line(
                 &self.line,

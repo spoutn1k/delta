@@ -181,12 +181,12 @@ pub mod ansi_test_utils {
     ) -> String {
         let mut output_buffer = String::new();
         let mut unused_writer = Vec::<u8>::new();
-        let mut painter = paint::Painter::new(&mut unused_writer, config);
+        let mut painter = paint::Painter::new(&mut unused_writer, config).unwrap();
         let syntax_highlighted_style = Style {
             is_syntax_highlighted: true,
             ..Style::new()
         };
-        painter.set_syntax(Some(filename_for_highlighting));
+        painter.set_syntax(Some(filename_for_highlighting)).unwrap();
         painter.set_highlighter();
         let lines = vec![(line.to_string(), state)];
         let syntax_style_sections = paint::get_syntax_style_sections_for_lines(

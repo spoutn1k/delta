@@ -1,4 +1,16 @@
-use crate::delta_unreachable;
+#[derive(Debug, thiserror::Error)]
+pub enum ConversionError {
+    #[error("Error converting OptionValue to bool.")]
+    Bool,
+    #[error("Error converting OptionValue to f64.")]
+    Float,
+    #[error("Error converting OptionValue to Option<String>.")]
+    OptionString,
+    #[error("Error converting OptionValue to String.")]
+    String,
+    #[error("Error converting OptionValue to usize.")]
+    Int,
+}
 
 /// A value associated with a Delta command-line option name.
 pub enum OptionValue {
@@ -21,11 +33,13 @@ impl From<bool> for OptionValue {
     }
 }
 
-impl From<OptionValue> for bool {
-    fn from(value: OptionValue) -> Self {
+impl TryFrom<OptionValue> for bool {
+    type Error = ConversionError;
+
+    fn try_from(value: OptionValue) -> Result<Self, Self::Error> {
         match value {
-            OptionValue::Boolean(value) => value,
-            _ => delta_unreachable("Error converting OptionValue to bool."),
+            OptionValue::Boolean(value) => Ok(value),
+            _ => Err(ConversionError::Bool),
         }
     }
 }
@@ -36,11 +50,12 @@ impl From<f64> for OptionValue {
     }
 }
 
-impl From<OptionValue> for f64 {
-    fn from(value: OptionValue) -> Self {
+impl TryFrom<OptionValue> for f64 {
+    type Error = ConversionError;
+    fn try_from(value: OptionValue) -> Result<Self, Self::Error> {
         match value {
-            OptionValue::Float(value) => value,
-            _ => delta_unreachable("Error converting OptionValue to f64."),
+            OptionValue::Float(value) => Ok(value),
+            _ => Err(ConversionError::Float),
         }
     }
 }
@@ -51,11 +66,13 @@ impl From<Option<String>> for OptionValue {
     }
 }
 
-impl From<OptionValue> for Option<String> {
-    fn from(value: OptionValue) -> Self {
+impl TryFrom<OptionValue> for Option<String> {
+    type Error = ConversionError;
+
+    fn try_from(value: OptionValue) -> Result<Self, Self::Error> {
         match value {
-            OptionValue::OptionString(value) => value,
-            _ => delta_unreachable("Error converting OptionValue to Option<String>."),
+            OptionValue::OptionString(value) => Ok(value),
+            _ => Err(ConversionError::OptionString),
         }
     }
 }
@@ -72,11 +89,13 @@ impl From<&str> for OptionValue {
     }
 }
 
-impl From<OptionValue> for String {
-    fn from(value: OptionValue) -> Self {
+impl TryFrom<OptionValue> for String {
+    type Error = ConversionError;
+
+    fn try_from(value: OptionValue) -> Result<Self, Self::Error> {
         match value {
-            OptionValue::String(value) => value,
-            _ => delta_unreachable("Error converting OptionValue to String."),
+            OptionValue::String(value) => Ok(value),
+            _ => Err(ConversionError::OptionString),
         }
     }
 }
@@ -87,11 +106,13 @@ impl From<usize> for OptionValue {
     }
 }
 
-impl From<OptionValue> for usize {
-    fn from(value: OptionValue) -> Self {
+impl TryFrom<OptionValue> for usize {
+    type Error = ConversionError;
+
+    fn try_from(value: OptionValue) -> Result<Self, Self::Error> {
         match value {
-            OptionValue::Int(value) => value,
-            _ => delta_unreachable("Error converting OptionValue to usize."),
+            OptionValue::Int(value) => Ok(value),
+            _ => Err(ConversionError::OptionString),
         }
     }
 }

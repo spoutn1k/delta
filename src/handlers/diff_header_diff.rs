@@ -1,5 +1,8 @@
-use crate::delta::{DiffType, InMergeConflict, MergeParents, State, StateMachine};
-use crate::handlers::diff_header::{get_repeated_file_path_from_diff_line, FileEvent};
+use crate::{
+    delta::{DiffType, InMergeConflict, MergeParents, State, StateMachine},
+    errors::Result,
+    handlers::diff_header::{FileEvent, get_repeated_file_path_from_diff_line},
+};
 
 impl StateMachine<'_> {
     #[inline]
@@ -8,11 +11,11 @@ impl StateMachine<'_> {
     }
 
     #[allow(clippy::unnecessary_wraps)]
-    pub fn handle_diff_header_diff_line(&mut self) -> std::io::Result<bool> {
+    pub fn handle_diff_header_diff_line(&mut self) -> Result<bool> {
         if !self.test_diff_header_diff_line() {
             return Ok(false);
         }
-        self.painter.paint_buffered_minus_and_plus_lines();
+        self.painter.paint_buffered_minus_and_plus_lines()?;
         self.painter.emit()?;
         self.state =
             if self.line.starts_with("diff --cc ") || self.line.starts_with("diff --combined ") {
@@ -40,7 +43,7 @@ impl StateMachine<'_> {
         self.plus_file_event = FileEvent::Change;
         self.current_file_pair = Some((self.minus_file.clone(), self.plus_file.clone()));
 
-        if !self.should_skip_line() {
+        if !self.should_skip_line()? {
             self.emit_line_unchanged()?;
         }
         Ok(true)

@@ -1,11 +1,14 @@
-use crate::delta::{State, StateMachine};
-use crate::paint::{BgShouldFill, StyleSectionSpecifier};
-use crate::utils::process;
+use crate::{
+    delta::{State, StateMachine},
+    errors::Result,
+    paint::{BgShouldFill, StyleSectionSpecifier},
+    utils::process,
+};
 
 impl StateMachine<'_> {
     // If this is a line of `git show $revision:/path/to/file.ext` output then
     // syntax-highlight it as language `ext`.
-    pub fn handle_git_show_file_line(&mut self) -> std::io::Result<bool> {
+    pub fn handle_git_show_file_line(&mut self) -> Result<bool> {
         self.painter.emit()?;
         let mut handled_line = false;
         if matches!(self.state, State::Unknown) {
@@ -13,7 +16,7 @@ impl StateMachine<'_> {
                 &*process::calling_process()
             {
                 self.state = State::GitShowFile;
-                self.painter.set_syntax(Some(filename));
+                self.painter.set_syntax(Some(filename))?;
             } else {
                 return Ok(handled_line);
             }

@@ -2,7 +2,8 @@ use crate::{
     ansi,
     config::{self, Config},
     delta::{DiffType, InMergeConflict, MergeParents, State},
-    delta_unreachable, edits,
+    edits,
+    errors::{Error, Result},
     features::{
         hyperlinks,
         line_numbers::{self, LineNumbersData},
@@ -73,8 +74,8 @@ pub enum StyleSectionSpecifier<'l> {
 }
 
 impl<'p> Painter<'p> {
-    pub fn new(writer: &'p mut dyn Write, config: &'p config::Config) -> Self {
-        let default_syntax = Self::get_syntax(&config.syntax_set, None, &config.default_language);
+    pub fn new(writer: &'p mut dyn Write, config: &'p config::Config) -> Result<Self> {
+        let default_syntax = Self::get_syntax(&config.syntax_set, None, &config.default_language)?;
         let panel_width_fix = ansifill::UseFullPanelWidth::new(config);
 
         let line_numbers_data = if config.line_numbers {
@@ -92,7 +93,7 @@ impl<'p> Painter<'p> {
         } else {
             None
         };
-        Self {
+        Ok(Self {
             minus_lines: Vec::new(),
             plus_lines: Vec::new(),
             output_buffer: String::new(),
@@ -103,22 +104,24 @@ impl<'p> Painter<'p> {
             line_numbers_data,
             merge_conflict_lines: merge_conflict::MergeConflictLines::default(),
             merge_conflict_commit_names: merge_conflict::MergeConflictCommitNames::default(),
-        }
+        })
     }
 
-    pub fn set_syntax(&mut self, filename: Option<&str>) {
+    pub fn set_syntax(&mut self, filename: Option<&str>) -> Result<()> {
         self.syntax = Painter::get_syntax(
             &self.config.syntax_set,
             filename,
             &self.config.default_language,
-        );
+        )?;
+
+        Ok(())
     }
 
     fn get_syntax<'a>(
         syntax_set: &'a SyntaxSet,
         filename: Option<&str>,
         fallback: &str,
-    ) -> &'a SyntaxReference {
+    ) -> Result<&'a SyntaxReference> {
         if let Some(filename) = filename {
             let path = std::path::Path::new(filename);
             let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
@@ -135,19 +138,17 @@ impl<'p> Painter<'p> {
                     .find_syntax_by_extension(file_name)
                     .or_else(|| syntax_set.find_syntax_by_extension(extension))
             {
-                return syntax;
+                return Ok(syntax);
             }
         }
 
         // Nothing found, try the user provided fallback, or the internal fallback.
         if let Some(syntax) = syntax_set.find_syntax_for_file(fallback).unwrap_or(None) {
-            syntax
+            Ok(syntax)
         } else {
             syntax_set
                 .find_syntax_by_extension(config::SYNTAX_FALLBACK_LANG)
-                .unwrap_or_else(|| {
-                    delta_unreachable("Failed to find any language syntax definitions.")
-                })
+                .ok_or(Error::NoLanguageDefinition)
         }
     }
 
@@ -157,19 +158,22 @@ impl<'p> Painter<'p> {
         };
     }
 
-    pub fn paint_buffered_minus_and_plus_lines(&mut self) {
+    pub fn paint_buffered_minus_and_plus_lines(&mut self) -> Result<()> {
         if self.minus_lines.is_empty() && self.plus_lines.is_empty() {
-            return;
+            return Ok(());
         }
+
         paint_minus_and_plus_lines(
             MinusPlus::new(&self.minus_lines, &self.plus_lines),
             &mut self.line_numbers_data,
             &mut self.highlighter,
             &mut self.output_buffer,
             self.config,
-        );
+        )?;
         self.minus_lines.clear();
         self.plus_lines.clear();
+
+        Ok(())
     }
 
     pub fn paint_zero_line(&mut self, line: &str, state: State) {
@@ -608,12 +612,12 @@ pub fn paint_minus_and_plus_lines(
     highlighter: &mut Option<HighlightLines>,
     output_buffer: &mut String,
     config: &config::Config,
-) {
+) -> Result<()> {
     let syntax_style_sections = MinusPlus::new(
         get_syntax_style_sections_for_lines(lines[Minus], highlighter.as_mut(), config),
         get_syntax_style_sections_for_lines(lines[Plus], highlighter.as_mut(), config),
     );
-    let (mut diff_style_sections, line_alignment) = get_diff_style_sections(&lines, config);
+    let (mut diff_style_sections, line_alignment) = get_diff_style_sections(&lines, config)?;
     let lines_have_homolog = edits::make_lines_have_homolog(&line_alignment);
     Painter::update_diff_style_sections(
         lines[Minus],
@@ -649,7 +653,7 @@ pub fn paint_minus_and_plus_lines(
             line_numbers_data,
             output_buffer,
             config,
-        )
+        )?
     } else {
         // Unified diff mode:
         if !lines[Minus].is_empty() {
@@ -679,6 +683,8 @@ pub fn paint_minus_and_plus_lines(
             );
         }
     }
+
+    Ok(())
 }
 
 pub fn get_syntax_style_sections_for_lines<'a>(
@@ -745,18 +751,24 @@ pub fn get_syntax_style_sections_for_lines<'a>(
 fn get_diff_style_sections<'a>(
     lines: &MinusPlus<&'a Vec<(String, State)>>,
     config: &config::Config,
-) -> (
+) -> Result<(
     MinusPlus<Vec<LineSections<'a, Style>>>,
     Vec<(Option<usize>, Option<usize>)>,
-) {
+)> {
     let (minus_lines, minus_styles): (Vec<&str>, Vec<Style>) = lines[Minus]
         .iter()
-        .map(|(s, state)| (s.as_str(), *config.get_style(state)))
+        .map(|(s, state)| Ok((s.as_str(), *config.get_style(state)?)))
+        .collect::<Result<Vec<(&str, Style)>>>()?
+        .into_iter()
         .unzip();
+
     let (plus_lines, plus_styles): (Vec<&str>, Vec<Style>) = lines[Plus]
         .iter()
-        .map(|(s, state)| (s.as_str(), *config.get_style(state)))
+        .map(|(s, state)| Ok((s.as_str(), *config.get_style(state)?)))
+        .collect::<Result<Vec<(&str, Style)>>>()?
+        .into_iter()
         .unzip();
+
     let (minus_line_diff_style_sections, plus_line_diff_style_sections, line_alignment) =
         edits::infer_edits(
             minus_lines,
@@ -769,11 +781,13 @@ fn get_diff_style_sections<'a>(
             config.max_line_distance,
             config.max_line_distance_for_naively_paired_lines,
         );
+
     let diff_sections = MinusPlus::new(
         minus_line_diff_style_sections,
         plus_line_diff_style_sections,
     );
-    (diff_sections, line_alignment)
+
+    Ok((diff_sections, line_alignment))
 }
 
 fn painted_prefix(state: State, config: &config::Config) -> Option<ANSIString<'_>> {

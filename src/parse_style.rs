@@ -1,5 +1,5 @@
 use crate::{
-    color, delta_unreachable,
+    color,
     errors::{Error, Result},
     git_config::GitConfig,
     style::{DecorationStyle, Style},
@@ -108,7 +108,7 @@ impl DecorationStyle {
             bits if bits == BOX | OL => DecorationStyle::BoxWithOverline(style),
             bits if bits == BOX | UL | OL => DecorationStyle::BoxWithUnderOverline(style),
             _ if is_omitted => DecorationStyle::NoDecoration,
-            _ => delta_unreachable("Unreachable code path reached in parse_decoration_style."),
+            _ => Err(Error::InvalidCodePath)?,
         })
     }
 

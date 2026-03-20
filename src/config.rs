@@ -2,7 +2,6 @@ use crate::{
     ansi, cli,
     color::{self, ColorMode},
     delta::State,
-    delta_unreachable,
     errors::{Error, Result},
     features::{
         navigate,
@@ -164,8 +163,8 @@ pub enum HunkHeaderIncludeCodeFragment {
 }
 
 impl Config {
-    pub fn get_style(&self, state: &State) -> &Style {
-        match state {
+    pub fn get_style(&self, state: &State) -> Result<&Style> {
+        Ok(match state {
             State::HunkMinus(_, _) => &self.minus_style,
             State::HunkZero(_, _) => &self.zero_style,
             State::HunkPlus(_, _) => &self.plus_style,
@@ -174,8 +173,8 @@ impl Config {
             State::Grep(GrepType::Ripgrep, _, _, _) => &self.classic_grep_header_style,
             State::HunkHeader(_, _, _, _) => &self.hunk_header_style,
             State::SubmoduleLog => &self.file_style,
-            _ => delta_unreachable("Unreachable code reached in get_style."),
-        }
+            _ => Err(Error::UnreachableStyle)?,
+        })
     }
 
     pub fn git_config(&self) -> Option<&GitConfig> {

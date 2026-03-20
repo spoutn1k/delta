@@ -1,8 +1,7 @@
 use crate::{
     ansi,
     config::{Config, GrepType},
-    delta_unreachable,
-    errors::Result,
+    errors::{Error, Result},
     features,
     handlers::{
         self, grep,
@@ -62,15 +61,15 @@ pub enum InMergeConflict {
 }
 
 impl DiffType {
-    pub fn n_parents(&self) -> usize {
+    pub fn n_parents(&self) -> Result<usize> {
         use DiffType::*;
         use MergeParents::*;
-        match self {
+        Ok(match self {
             Combined(Prefix(prefix), _) => prefix.len(),
             Combined(Number(n_parents), _) => *n_parents,
             Unified => 1,
-            Combined(Unknown, _) => delta_unreachable("Number of merge parents must be known."),
-        }
+            Combined(Unknown, _) => Err(Error::UnknownParentCount)?,
+        })
     }
 }
 
@@ -122,12 +121,12 @@ pub fn delta<I>(lines: ByteLines<I>, writer: &mut dyn Write, config: &Config) ->
 where
     I: BufRead,
 {
-    StateMachine::new(writer, config).consume(lines)
+    StateMachine::new(writer, config)?.consume(lines)
 }
 
 impl<'a> StateMachine<'a> {
-    pub fn new(writer: &'a mut dyn Write, config: &'a Config) -> Self {
-        Self {
+    pub fn new(writer: &'a mut dyn Write, config: &'a Config) -> Result<Self> {
+        Ok(Self {
             line: "".to_string(),
             raw_line: "".to_string(),
             state: State::Unknown,
@@ -140,11 +139,11 @@ impl<'a> StateMachine<'a> {
             mode_info: "".to_string(),
             current_file_pair: None,
             handled_diff_header_header_line_file_pair: None,
-            painter: Painter::new(writer, config),
+            painter: Painter::new(writer, config)?,
             config,
             blame_key_colors: HashMap::new(),
             minus_line_counter: AmbiguousDiffMinusCounter::not_needed(),
-        }
+        })
     }
 
     fn consume<I>(&mut self, mut lines: ByteLines<I>) -> Result<()>
@@ -183,12 +182,12 @@ impl<'a> StateMachine<'a> {
                 || self.handle_git_show_file_line()?
                 || self.handle_blame_line()?
                 || self.handle_grep_line()?
-                || self.should_skip_line()
+                || self.should_skip_line()?
                 || self.emit_line_unchanged()?;
         }
 
         self.handle_pending_line_with_diff_name()?;
-        self.painter.paint_buffered_minus_and_plus_lines();
+        self.painter.paint_buffered_minus_and_plus_lines()?;
         self.painter.emit()?;
         Ok(())
     }
@@ -240,10 +239,10 @@ impl<'a> StateMachine<'a> {
     }
 
     /// Skip file metadata lines unless a raw diff style has been requested.
-    pub fn should_skip_line(&self) -> bool {
-        matches!(self.state, State::DiffHeader(_))
-            && self.should_handle()
-            && !self.config.color_only
+    pub fn should_skip_line(&self) -> Result<bool> {
+        Ok(matches!(self.state, State::DiffHeader(_))
+            && self.should_handle()?
+            && !self.config.color_only)
     }
 
     /// Emit unchanged any line that delta does not handle.
@@ -261,9 +260,9 @@ impl<'a> StateMachine<'a> {
     /// Should a handle_* function be called on this element?
     // TODO: I'm not sure the above description is accurate; I think this
     // function needs a more accurate name.
-    pub fn should_handle(&self) -> bool {
-        let style = self.config.get_style(&self.state);
-        !(style.is_raw && style.decoration_style == DecorationStyle::NoDecoration)
+    pub fn should_handle(&self) -> Result<bool> {
+        let style = self.config.get_style(&self.state)?;
+        Ok(!(style.is_raw && style.decoration_style == DecorationStyle::NoDecoration))
     }
 }
 

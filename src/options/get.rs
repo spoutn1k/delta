@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use crate::{
     cli, features,
     git_config::{self, GitConfigGet},
-    options::option_value::{OptionValue, ProvenancedOptionValue},
+    options::option_value::{ConversionError, OptionValue, ProvenancedOptionValue},
 };
 use ProvenancedOptionValue::*;
 
@@ -29,11 +29,11 @@ pub fn get_option_value<T>(
     builtin_features: &HashMap<String, features::BuiltinFeature>,
     opt: &cli::Opt,
     git_config: &mut Option<git_config::GitConfig>,
-) -> Option<T>
+) -> Result<Option<T>, ConversionError>
 where
     T: GitConfigGet,
     T: GetOptionValue,
-    T: From<OptionValue>,
+    T: TryFrom<OptionValue, Error = ConversionError>,
     T: Into<OptionValue>,
 {
     T::get_option_value(option_name, builtin_features, opt, git_config)
@@ -64,17 +64,17 @@ pub trait GetOptionValue {
         builtin_features: &HashMap<String, features::BuiltinFeature>,
         opt: &cli::Opt,
         git_config: &mut Option<git_config::GitConfig>,
-    ) -> Option<Self>
+    ) -> Result<Option<Self>, ConversionError>
     where
         Self: Sized,
         Self: GitConfigGet,
-        Self: From<OptionValue>,
+        Self: TryFrom<OptionValue, Error = ConversionError>,
         Self: Into<OptionValue>,
     {
         if let Some(git_config) = git_config
             && let Some(value) = git_config.get::<Self>(&format!("delta.{option_name}"))
         {
-            return Some(value);
+            return Ok(Some(value));
         }
         if let Some(features) = &opt.features {
             for feature in features.split_whitespace().rev() {
@@ -86,13 +86,14 @@ pub trait GetOptionValue {
                     git_config,
                 ) {
                     Some(GitConfigValue(value)) | Some(DefaultValue(value)) => {
-                        return Some(value.into());
+                        return Ok(Some(value.try_into()?));
                     }
                     None => {}
                 }
             }
         }
-        None
+
+        Ok(None)
     }
 
     /// Return the value, or default value, associated with `option_name` under feature name

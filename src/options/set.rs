@@ -1,6 +1,7 @@
 use crate::{
     cli, config,
     env::DeltaEnv,
+    errors::Result,
     features,
     git_config::GitConfig,
     options::{
@@ -39,8 +40,6 @@ pub enum SetError {
     InvalidTrueColorOption(String),
 }
 
-type Result<T> = std::result::Result<T, SetError>;
-
 macro_rules! set_options {
     ([$( $field_ident:ident ),* ],
     $opt:expr, $builtin_features:expr, $git_config:expr, $arg_matches:expr, $expected_option_name_map:expr, $check_names:expr) => {
@@ -54,7 +53,7 @@ macro_rules! set_options {
                     &$builtin_features,
                     $opt,
                     $git_config
-                ) {
+                )? {
                     $opt.$field_ident = value;
                 }
             }
@@ -551,7 +550,7 @@ fn split_feature_string(features: &str) -> impl Iterator<Item = &str> {
 impl FromStr for cli::InspectRawLines {
     type Err = SetError;
 
-    fn from_str(s: &str) -> Result<Self> {
+    fn from_str(s: &str) -> std::result::Result<Self, SetError> {
         match s.to_lowercase().as_str() {
             "true" => Ok(Self::True),
             "false" => Ok(Self::False),
@@ -563,7 +562,7 @@ impl FromStr for cli::InspectRawLines {
 impl FromStr for PagingMode {
     type Err = SetError;
 
-    fn from_str(paging_mode_string: &str) -> Result<Self> {
+    fn from_str(paging_mode_string: &str) -> std::result::Result<Self, SetError> {
         match paging_mode_string.to_lowercase().as_str() {
             "always" => Ok(PagingMode::Always),
             "never" => Ok(PagingMode::Never),

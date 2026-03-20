@@ -1,8 +1,11 @@
 use std::borrow::Cow;
 
 use super::draw;
-use crate::delta::{State, StateMachine};
-use crate::features;
+use crate::{
+    delta::{State, StateMachine},
+    errors::Result,
+    features,
+};
 
 impl StateMachine<'_> {
     #[inline]
@@ -10,15 +13,15 @@ impl StateMachine<'_> {
         self.config.commit_regex.is_match(&self.line)
     }
 
-    pub fn handle_commit_meta_header_line(&mut self) -> std::io::Result<bool> {
+    pub fn handle_commit_meta_header_line(&mut self) -> Result<bool> {
         if !self.test_commit_meta_header_line() {
             return Ok(false);
         }
         let mut handled_line = false;
-        self.painter.paint_buffered_minus_and_plus_lines();
+        self.painter.paint_buffered_minus_and_plus_lines()?;
         self.handle_pending_line_with_diff_name()?;
         self.state = State::CommitMeta;
-        if self.should_handle() {
+        if self.should_handle()? {
             self.painter.emit()?;
             self._handle_commit_meta_header_line()?;
             handled_line = true

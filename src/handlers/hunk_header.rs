@@ -27,6 +27,7 @@ use crate::{
         HunkHeaderIncludeLineNumber,
     },
     delta::{self, DiffType, InMergeConflict, MergeParents, State, StateMachine},
+    errors::Result,
     paint::{self, BgShouldFill, Painter, StyleSectionSpecifier},
     style::{DecorationStyle, Style},
 };
@@ -154,8 +155,8 @@ impl StateMachine<'_> {
         parsed_hunk_header: &ParsedHunkHeader,
         line: &str,
         raw_line: &str,
-    ) -> std::io::Result<bool> {
-        self.painter.paint_buffered_minus_and_plus_lines();
+    ) -> Result<bool> {
+        self.painter.paint_buffered_minus_and_plus_lines()?;
         self.painter.set_highlighter();
         self.painter.emit()?;
 

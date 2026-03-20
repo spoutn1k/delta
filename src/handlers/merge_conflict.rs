@@ -1,17 +1,15 @@
-use std::ops::{Index, IndexMut};
-
-use itertools::Itertools;
-use unicode_segmentation::UnicodeSegmentation;
-
 use super::draw;
 use crate::{
     cli, config,
     delta::{DiffType, InMergeConflict, MergeParents, State, StateMachine},
-    delta_unreachable,
+    errors::{Error, Result},
     minusplus::MinusPlus,
     paint::{self, prepare},
     style::Style,
 };
+use itertools::Itertools;
+use std::ops::{Index, IndexMut};
+use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum MergeConflictCommit {
@@ -32,7 +30,7 @@ pub type MergeConflictLines = MergeConflictCommits<Vec<(String, State)>>;
 pub type MergeConflictCommitNames = MergeConflictCommits<Option<String>>;
 
 impl StateMachine<'_> {
-    pub fn handle_merge_conflict_line(&mut self) -> std::io::Result<bool> {
+    pub fn handle_merge_conflict_line(&mut self) -> Result<bool> {
         use DiffType::*;
         use MergeConflictCommit::*;
         use State::*;
@@ -56,7 +54,7 @@ impl StateMachine<'_> {
                     || self.store_line(
                         Ours,
                         HunkPlus(Combined(merge_parents, InMergeConflict::Yes), None),
-                    );
+                    )?;
             }
             MergeConflict(merge_parents, Ancestral) => {
                 handled_line = self.enter_theirs(&merge_parents)
@@ -64,14 +62,14 @@ impl StateMachine<'_> {
                     || self.store_line(
                         Ancestral,
                         HunkMinus(Combined(merge_parents, InMergeConflict::Yes), None),
-                    );
+                    )?;
             }
             MergeConflict(merge_parents, Theirs) => {
                 handled_line = self.exit_merge_conflict(&merge_parents)?
                     || self.store_line(
                         Theirs,
                         HunkPlus(Combined(merge_parents, InMergeConflict::Yes), None),
-                    );
+                    )?;
             }
             _ => {}
         }
@@ -111,7 +109,7 @@ impl StateMachine<'_> {
         }
     }
 
-    fn exit_merge_conflict(&mut self, merge_parents: &MergeParents) -> std::io::Result<bool> {
+    fn exit_merge_conflict(&mut self, merge_parents: &MergeParents) -> Result<bool> {
         if let Some(commit) = parse_merge_marker(&self.line, "++>>>>>>>") {
             self.painter.merge_conflict_commit_names[Theirs] = Some(commit.to_string());
             self.paint_buffered_merge_conflict_lines(merge_parents)?;
@@ -121,21 +119,18 @@ impl StateMachine<'_> {
         }
     }
 
-    fn store_line(&mut self, commit: MergeConflictCommit, state: State) -> bool {
+    fn store_line(&mut self, commit: MergeConflictCommit, state: State) -> Result<bool> {
         use State::*;
         if let HunkMinus(diff_type, _) | HunkZero(diff_type, _) | HunkPlus(diff_type, _) = &state {
-            let line = prepare(&self.line, diff_type.n_parents(), self.config);
+            let line = prepare(&self.line, diff_type.n_parents()?, self.config);
             self.painter.merge_conflict_lines[commit].push((line, state));
-            true
+            Ok(true)
         } else {
-            delta_unreachable(&format!("Invalid state: {state:?}"))
+            Ok(Err(Error::UnreachableState(format!("{state:?}")))?)
         }
     }
 
-    fn paint_buffered_merge_conflict_lines(
-        &mut self,
-        merge_parents: &MergeParents,
-    ) -> std::io::Result<()> {
+    fn paint_buffered_merge_conflict_lines(&mut self, merge_parents: &MergeParents) -> Result<()> {
         use DiffType::*;
         use State::*;
         self.painter.emit()?;
@@ -165,7 +160,7 @@ impl StateMachine<'_> {
                 &mut self.painter.highlighter,
                 &mut self.painter.output_buffer,
                 self.config,
-            );
+            )?;
             self.painter.emit()?;
         }
         // write_merge_conflict_decoration("bold ol", &mut self.painter, self.config)?;

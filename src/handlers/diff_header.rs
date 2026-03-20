@@ -1,13 +1,16 @@
-use std::borrow::Cow;
-use std::path::Path;
+use std::{borrow::Cow, path::Path};
 
 use unicode_segmentation::UnicodeSegmentation;
 
 use super::draw;
-use crate::config::Config;
-use crate::delta::{DiffType, Source, State, StateMachine};
-use crate::paint::Painter;
-use crate::{features, utils};
+use crate::{
+    config::Config,
+    delta::{DiffType, Source, State, StateMachine},
+    errors::Result,
+    features,
+    paint::Painter,
+    utils,
+};
 
 // https://git-scm.com/docs/git-config#Documentation/git-config.txt-diffmnemonicPrefix
 const DIFF_PREFIXES: [&str; 6] = ["a/", "b/", "c/", "i/", "o/", "w/"];
@@ -24,17 +27,17 @@ pub enum FileEvent {
 
 impl StateMachine<'_> {
     /// Check for the old mode|new mode lines and cache their info for later use.
-    pub fn handle_diff_header_mode_line(&mut self) -> std::io::Result<bool> {
+    pub fn handle_diff_header_mode_line(&mut self) -> Result<bool> {
         let mut handled_line = false;
         if let Some(line_suf) = self.line.strip_prefix("old mode ") {
             self.state = State::DiffHeader(DiffType::Unified);
-            if self.should_handle() && !self.config.color_only {
+            if self.should_handle()? && !self.config.color_only {
                 self.mode_info = line_suf.to_string();
                 handled_line = true;
             }
         } else if let Some(line_suf) = self.line.strip_prefix("new mode ") {
             self.state = State::DiffHeader(DiffType::Unified);
-            if self.should_handle() && !self.config.color_only && !self.mode_info.is_empty() {
+            if self.should_handle()? && !self.config.color_only && !self.mode_info.is_empty() {
                 self.mode_info = match (self.mode_info.as_str(), line_suf) {
                     // 100755 for executable and 100644 for non-executable are the only file modes Git records.
                     // https://medium.com/@tahteche/how-git-treats-changes-in-file-permissions-f71874ca239d
@@ -51,7 +54,7 @@ impl StateMachine<'_> {
         Ok(handled_line)
     }
 
-    fn should_write_generic_diff_header_header_line(&mut self) -> std::io::Result<bool> {
+    fn should_write_generic_diff_header_header_line(&mut self) -> Result<bool> {
         // In color_only mode, raw_line's structure shouldn't be changed.
         // So it needs to avoid fn _handle_diff_header_header_line
         // (it connects the plus_file and minus_file),
@@ -79,7 +82,7 @@ impl StateMachine<'_> {
     }
 
     /// Check for and handle the "--- filename ..." line.
-    pub fn handle_diff_header_minus_line(&mut self) -> std::io::Result<bool> {
+    pub fn handle_diff_header_minus_line(&mut self) -> Result<bool> {
         if !self.test_diff_header_minus_line() {
             return Ok(false);
         }
@@ -94,15 +97,15 @@ impl StateMachine<'_> {
         if self.source == Source::DiffUnified {
             self.state = State::DiffHeader(DiffType::Unified);
             self.painter
-                .set_syntax(get_filename_from_marker_line(&self.line));
+                .set_syntax(get_filename_from_marker_line(&self.line))?;
         } else {
             self.painter
                 .set_syntax(get_filename_from_diff_header_line_file_path(
                     &self.minus_file,
-                ));
+                ))?;
         }
 
-        self.painter.paint_buffered_minus_and_plus_lines();
+        self.painter.paint_buffered_minus_and_plus_lines()?;
         self.should_write_generic_diff_header_header_line()
     }
 
@@ -115,7 +118,7 @@ impl StateMachine<'_> {
     }
 
     /// Check for and handle the "+++ filename ..." line.
-    pub fn handle_diff_header_plus_line(&mut self) -> std::io::Result<bool> {
+    pub fn handle_diff_header_plus_line(&mut self) -> Result<bool> {
         if !self.test_diff_header_plus_line() {
             return Ok(false);
         }
@@ -129,13 +132,13 @@ impl StateMachine<'_> {
         self.painter
             .set_syntax(get_filename_from_diff_header_line_file_path(
                 &self.plus_file,
-            ));
+            ))?;
         self.current_file_pair = Some((self.minus_file.clone(), self.plus_file.clone()));
 
-        self.painter.paint_buffered_minus_and_plus_lines();
+        self.painter.paint_buffered_minus_and_plus_lines()?;
         if self.should_write_generic_diff_header_header_line()? {
             handled_line = true;
-        } else if self.should_handle()
+        } else if self.should_handle()?
             && self.handled_diff_header_header_line_file_pair != self.current_file_pair
         {
             self.painter.emit()?;
@@ -154,7 +157,7 @@ impl StateMachine<'_> {
     }
 
     /// Check for and handle the "deleted file ..."  line.
-    pub fn handle_diff_header_file_operation_line(&mut self) -> std::io::Result<bool> {
+    pub fn handle_diff_header_file_operation_line(&mut self) -> Result<bool> {
         if !self.test_diff_header_file_operation_line() {
             return Ok(false);
         }
@@ -181,7 +184,7 @@ impl StateMachine<'_> {
         }
 
         if self.should_write_generic_diff_header_header_line()?
-            || (self.should_handle()
+            || (self.should_handle()?
                 && self.handled_diff_header_header_line_file_pair != self.current_file_pair)
         {
             handled_line = true;
@@ -190,7 +193,7 @@ impl StateMachine<'_> {
     }
 
     /// Construct file change line from minus and plus file and write with DiffHeader styling.
-    fn _handle_diff_header_header_line(&mut self, comparing: bool) -> std::io::Result<()> {
+    fn _handle_diff_header_header_line(&mut self, comparing: bool) -> Result<()> {
         let line = get_file_change_description_from_file_paths(
             &self.minus_file,
             &self.plus_file,
@@ -214,7 +217,7 @@ impl StateMachine<'_> {
         matches!(self.state, State::DiffHeader(_)) || self.source == Source::DiffUnified
     }
 
-    pub fn handle_pending_line_with_diff_name(&mut self) -> std::io::Result<()> {
+    pub fn handle_pending_line_with_diff_name(&mut self) -> Result<()> {
         if !self.test_pending_line_with_diff_name() {
             return Ok(());
         }
@@ -250,7 +253,7 @@ impl StateMachine<'_> {
                 self.config,
             )
         } else if !self.config.color_only
-            && self.should_handle()
+            && self.should_handle()?
             && self.handled_diff_header_header_line_file_pair != self.current_file_pair
         {
             self._handle_diff_header_header_line(self.source == Source::DiffUnified)?;
@@ -270,7 +273,7 @@ pub fn write_generic_diff_header_header_line(
     painter: &mut Painter,
     mode_info: &mut String,
     config: &Config,
-) -> std::io::Result<()> {
+) -> Result<()> {
     // If file_style is "omit", we'll skip the process and print nothing.
     // However in the case of color_only mode,
     // we won't skip because we can't change raw_line structure.
@@ -470,7 +473,7 @@ pub fn get_file_change_description_from_file_paths(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::integration_test_utils::{make_config_from_args, DeltaTest};
+    use crate::tests::integration_test_utils::{DeltaTest, make_config_from_args};
     use insta::assert_snapshot;
 
     #[test]
@@ -637,7 +640,8 @@ mod tests {
         );
         assert_eq!(
             get_repeated_file_path_from_diff_line(
-                "diff --git a/.config/Code - Insiders/User/settings.json b/.config/Code - Insiders/User/settings.json"),
+                "diff --git a/.config/Code - Insiders/User/settings.json b/.config/Code - Insiders/User/settings.json"
+            ),
             Some(".config/Code - Insiders/User/settings.json".to_string())
         );
         assert_eq!(

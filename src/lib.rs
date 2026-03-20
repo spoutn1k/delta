@@ -25,7 +25,10 @@ pub mod subcommands;
 mod tests;
 
 pub mod errors {
-    use crate::options::set::SetError;
+    use crate::{
+        handlers::blame::BlameError,
+        options::{self, set::SetError},
+    };
     use std::{
         collections::HashSet,
         num::{ParseFloatError, ParseIntError},
@@ -35,11 +38,22 @@ pub mod errors {
 
     #[derive(thiserror::Error, Debug)]
     pub enum Error {
-        #[error(transparent)]
-        ArgumentParsingError(#[from] clap::Error),
+        #[error("side-by-side requires Some(line_numbers_data)")]
+        NoLineNumberData,
+        #[error("Number of merge parents must be known.")]
+        UnknownParentCount,
+        #[error("Failed to find any language syntax definitions.")]
+        NoLanguageDefinition,
+        #[error("Unreachable code path reached in parse_decoration_style.")]
+        InvalidCodePath,
+        #[error("Unreachable state: {0}")]
+        UnreachableState(String),
+        #[error("Unexpected state in new_line_state: {0}")]
+        UnexpectedNewLineState(String),
+        #[error("Unreachable code reached in get_style.")]
+        UnreachableStyle,
         #[error(
-            "\
-It looks like you have set delta as the value of $PAGER. \
+            "It looks like you have set delta as the value of $PAGER. \
 This would result in a non-terminating recursion. \
 delta is not an appropriate value for $PAGER \
 (but it is an appropriate value for $GIT_PAGER)."
@@ -51,8 +65,6 @@ delta is not an appropriate value for $PAGER \
         StyleKeyNotFound(String),
         #[error("Your delta styles form a cycle! {0:?}")]
         CyclicalStyles(HashSet<String>),
-        #[error(transparent)]
-        SetError(#[from] SetError),
         #[error("Failed to read git config: {0}")]
         GitConfigError(#[from] git2::Error),
         #[error("Invalid style string: {0}. See the STYLES section of delta --help.")]
@@ -65,12 +77,6 @@ delta is not an appropriate value for $PAGER \
         SyntaxBackground,
         #[error("'{0}' may not be used in a decoration style")]
         DecorationStyleInvalidArgument(String),
-        #[error("Invalid format type \"{0}\" for blame-line-numbers")]
-        BlameFormatInvalidFormat(String),
-        #[error("Invalid number for blame-line-numbers in every-N argument: {0}")]
-        BlameFormatInvalidNumber(ParseIntError),
-        #[error("Too many format arguments numbers for blame-line-numbers")]
-        BlameFormatCountError,
         #[error("Invalid option for grep-output-type: Expected \"ripgrep\" or \"classic\".")]
         GrepOutputTypeInvalid,
         #[error("Invalid option for line-fill-method: Expected \"ansi\" or \"spaces\".")]
@@ -95,8 +101,6 @@ delta is not an appropriate value for $PAGER \
             "No themes found. Please see https://dandavison.github.io/delta/custom-themes.html."
         )]
         NoThemes,
-        #[error(transparent)]
-        Io(#[from] std::io::Error),
         #[error("Not a GitHub, GitLab, SourceHut or Codeberg repo")]
         UnknownGitRemote,
         #[error("Could not parse pager command: {0}")]
@@ -111,29 +115,15 @@ delta is not an appropriate value for $PAGER \
         WrapRightPercentInvalidValue(f64),
         #[error("Invalid value for {0}, display width of \"{1}\" must be {2} but is {3}")]
         DisplayWidthInvalidValue(String, String, usize, usize),
+        #[error(transparent)]
+        SetError(#[from] SetError),
+        #[error(transparent)]
+        ArgumentParsingError(#[from] clap::Error),
+        #[error(transparent)]
+        OptionConversion(#[from] options::option_value::ConversionError),
+        #[error(transparent)]
+        BlameError(#[from] BlameError),
+        #[error(transparent)]
+        Io(#[from] std::io::Error),
     }
-}
-
-pub fn fatal<T>(errmsg: T) -> !
-where
-    T: AsRef<str> + std::fmt::Display,
-{
-    #[cfg(not(test))]
-    {
-        use std::process;
-
-        eprintln!("{errmsg}");
-        // As in Config::error_exit_code: use 2 for error
-        // because diff uses 0 and 1 for non-error.
-        process::exit(2);
-    }
-    #[cfg(test)]
-    panic!("{}\n", errmsg);
-}
-
-pub fn delta_unreachable(message: &str) -> ! {
-    fatal(format!(
-        "{message} This should not be possible. \
-         Please report the bug at https://github.com/dandavison/delta/issues.",
-    ));
 }

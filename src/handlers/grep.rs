@@ -6,7 +6,7 @@ use crate::{
         HunkHeaderIncludeLineNumber,
     },
     delta::{State, StateMachine},
-    delta_unreachable,
+    errors::{Error, Result},
     handlers::{self, ripgrep_json},
     paint::{self, BgShouldFill, StyleSectionSpecifier},
     style::Style,
@@ -81,7 +81,7 @@ impl LineType {
 
 impl StateMachine<'_> {
     // If this is a line of grep output then render it accordingly.
-    pub fn handle_grep_line(&mut self) -> std::io::Result<bool> {
+    pub fn handle_grep_line(&mut self) -> Result<bool> {
         self.painter.emit()?;
 
         let (previous_path, previous_line_type, previous_line, try_parse) = match &self.state {
@@ -121,7 +121,7 @@ impl StateMachine<'_> {
                 || grep_line.line_type == LineType::Context)
             && line_number_jump;
         if new_path {
-            self.painter.set_syntax(Some(grep_line.path.as_ref()));
+            self.painter.set_syntax(Some(grep_line.path.as_ref()))?;
         }
         if new_path || new_section {
             self.painter.set_highlighter()
@@ -142,7 +142,7 @@ impl StateMachine<'_> {
             State::Grep(GrepType::Classic, _, _, _) => {
                 self.emit_classic_format_grep_line(grep_line)
             }
-            _ => delta_unreachable("Impossible state while handling grep line."),
+            _ => Err(Error::UnreachableState("while handling grep line.".into()))?,
         }?;
         Ok(true)
     }

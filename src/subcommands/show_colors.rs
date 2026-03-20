@@ -29,8 +29,8 @@ pub fn show_colors() -> Result<()> {
         OutputType::from_mode(&env, PagingMode::QuitIfOneScreen, None, &pagercfg).unwrap();
     let writer = output_type.handle().unwrap();
 
-    let mut painter = paint::Painter::new(writer, &config);
-    painter.set_syntax(Some("a.ts"));
+    let mut painter = paint::Painter::new(writer, &config)?;
+    painter.set_syntax(Some("a.ts"))?;
     painter.set_highlighter();
 
     let title_style = ansi_term::Style::new().bold();
