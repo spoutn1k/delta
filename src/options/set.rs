@@ -96,10 +96,10 @@ pub fn set_options(
     arg_matches: &clap::ArgMatches,
     assets: HighlightingAssets,
 ) -> Result<()> {
-    if let Some(git_config) = git_config {
-        if opt.no_gitconfig {
-            git_config.enabled = false;
-        }
+    if let Some(git_config) = git_config
+        && opt.no_gitconfig
+    {
+        git_config.enabled = false;
     }
     opt.navigate = opt.navigate || opt.env.navigate.is_some();
     if opt.syntax_theme.is_none() {
@@ -430,17 +430,17 @@ fn gather_features(
 
     if let Some(git_config) = git_config {
         // Gather features from [delta] section if --features was not passed.
-        if opt.features.is_none() {
-            if let Some(feature_string) = git_config.get::<String>("delta.features") {
-                for feature in split_feature_string(&feature_string) {
-                    gather_features_recursively(
-                        feature,
-                        &mut features,
-                        builtin_features,
-                        opt,
-                        git_config,
-                    )
-                }
+        if opt.features.is_none()
+            && let Some(feature_string) = git_config.get::<String>("delta.features")
+        {
+            for feature in split_feature_string(&feature_string) {
+                gather_features_recursively(
+                    feature,
+                    &mut features,
+                    builtin_features,
+                    opt,
+                    git_config,
+                )
             }
         }
         // Always gather builtin feature flags from [delta] section.
@@ -525,32 +525,20 @@ fn gather_builtin_features_recursively(
     }
     features.push_front(feature_string);
     if let Some(feature_data) = builtin_features.get(feature) {
-        if let Some(child_features_fn) = feature_data.get("features") {
-            if let ProvenancedOptionValue::DefaultValue(OptionValue::String(features_string)) =
+        if let Some(child_features_fn) = feature_data.get("features")
+            && let ProvenancedOptionValue::DefaultValue(OptionValue::String(features_string)) =
                 child_features_fn(opt, &None)
-            {
-                for child_feature in split_feature_string(&features_string) {
-                    gather_builtin_features_recursively(
-                        child_feature,
-                        features,
-                        builtin_features,
-                        opt,
-                    );
-                }
+        {
+            for child_feature in split_feature_string(&features_string) {
+                gather_builtin_features_recursively(child_feature, features, builtin_features, opt);
             }
         }
         for child_feature in builtin_features.keys() {
-            if let Some(child_features_fn) = feature_data.get(child_feature) {
-                if let ProvenancedOptionValue::DefaultValue(OptionValue::Boolean(true)) =
+            if let Some(child_features_fn) = feature_data.get(child_feature)
+                && let ProvenancedOptionValue::DefaultValue(OptionValue::Boolean(true)) =
                     child_features_fn(opt, &None)
-                {
-                    gather_builtin_features_recursively(
-                        child_feature,
-                        features,
-                        builtin_features,
-                        opt,
-                    );
-                }
+            {
+                gather_builtin_features_recursively(child_feature, features, builtin_features, opt);
             }
         }
     }

@@ -213,14 +213,14 @@ impl<'a> StateMachine<'a> {
         // When a file has \r\n line endings, git sometimes adds ANSI escape sequences between the
         // \r and \n, in which case byte_lines does not remove the \r. Remove it now. [EndCRLF]
         // TODO: Limit the number of characters we examine when looking for the \r?
-        if let Some(cr_index) = self.raw_line.rfind('\r') {
-            if ansi::measure_text_width(&self.raw_line[cr_index + 1..]) == 0 {
-                self.raw_line = format!(
-                    "{}{}",
-                    &self.raw_line[..cr_index],
-                    &self.raw_line[cr_index + 1..]
-                );
-            }
+        if let Some(cr_index) = self.raw_line.rfind('\r')
+            && ansi::measure_text_width(&self.raw_line[cr_index + 1..]) == 0
+        {
+            self.raw_line = format!(
+                "{}{}",
+                &self.raw_line[..cr_index],
+                &self.raw_line[cr_index + 1..]
+            );
         }
         if self.config.max_line_length > 0
             && self.raw_line.len() > self.config.max_line_length

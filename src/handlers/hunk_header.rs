@@ -18,16 +18,18 @@
 // src/hunk_header.rs:119: fn write_to_output_buffer( │
 // ───────────────────────────────────────────────────┘
 // ```
-use std::convert::TryInto;
-use std::fmt::Write as FmtWrite;
+use std::{convert::TryInto, fmt::Write as FmtWrite};
 
 use super::draw;
-use crate::config::{
-    Config, HunkHeaderIncludeCodeFragment, HunkHeaderIncludeFilePath, HunkHeaderIncludeLineNumber,
+use crate::{
+    config::{
+        Config, HunkHeaderIncludeCodeFragment, HunkHeaderIncludeFilePath,
+        HunkHeaderIncludeLineNumber,
+    },
+    delta::{self, DiffType, InMergeConflict, MergeParents, State, StateMachine},
+    paint::{self, BgShouldFill, Painter, StyleSectionSpecifier},
+    style::{DecorationStyle, Style},
 };
-use crate::delta::{self, DiffType, InMergeConflict, MergeParents, State, StateMachine};
-use crate::paint::{self, BgShouldFill, Painter, StyleSectionSpecifier};
-use crate::style::{DecorationStyle, Style};
 use lazy_static::lazy_static;
 use regex::Regex;
 
@@ -128,12 +130,11 @@ impl StateMachine<'_> {
                 _ => Unified,
             };
 
-            if self.minus_line_counter.must_count() {
-                if let &[(_, minus_lines), (_, _plus_lines), ..] =
+            if self.minus_line_counter.must_count()
+                && let &[(_, minus_lines), (_, _plus_lines), ..] =
                     parsed_hunk_header.line_numbers_and_hunk_lengths.as_slice()
-                {
-                    self.minus_line_counter = AmbiguousDiffMinusCounter::count_from(minus_lines);
-                }
+            {
+                self.minus_line_counter = AmbiguousDiffMinusCounter::count_from(minus_lines);
             }
 
             self.state = HunkHeader(
@@ -436,8 +437,7 @@ fn write_to_output_buffer(
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use crate::ansi::strip_ansi_codes;
-    use crate::tests::integration_test_utils;
+    use crate::{ansi::strip_ansi_codes, tests::integration_test_utils};
 
     #[test]
     fn test_parse_hunk_header() {

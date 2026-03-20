@@ -35,6 +35,8 @@ pub mod errors {
 
     #[derive(thiserror::Error, Debug)]
     pub enum Error {
+        #[error(transparent)]
+        ArgumentParsingError(#[from] clap::Error),
         #[error(
             "\
 It looks like you have set delta as the value of $PAGER. \

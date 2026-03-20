@@ -1,13 +1,3 @@
-use std::{borrow::Cow, collections::HashMap, io::Write};
-
-use ansi_term::ANSIString;
-use itertools::Itertools;
-use syntect::{
-    easy::HighlightLines,
-    highlighting::Style as SyntectStyle,
-    parsing::{SyntaxReference, SyntaxSet},
-};
-
 use crate::{
     ansi,
     config::{self, Config},
@@ -25,6 +15,14 @@ use crate::{
     style::Style,
     utils,
     utils::tabs,
+};
+use ansi_term::ANSIString;
+use itertools::Itertools;
+use std::{borrow::Cow, collections::HashMap, io::Write};
+use syntect::{
+    easy::HighlightLines,
+    highlighting::Style as SyntectStyle,
+    parsing::{SyntaxReference, SyntaxSet},
 };
 
 pub type LineSections<'a, S> = Vec<(S, &'a str)>;
@@ -132,13 +130,12 @@ impl<'p> Painter<'p> {
             // This means file formats like Makefile/Dockerfile/Rakefile etc. will get highlighted,
             // but 1-4 short filenames will not -- even if they, as a whole, match an extension:
             // 'rs' will not get highlighted, while 'x.rs' will.
-            if !extension.is_empty() || file_name.len() > 4 {
-                if let Some(syntax) = syntax_set
+            if (!extension.is_empty() || file_name.len() > 4)
+                && let Some(syntax) = syntax_set
                     .find_syntax_by_extension(file_name)
                     .or_else(|| syntax_set.find_syntax_by_extension(extension))
-                {
-                    return syntax;
-                }
+            {
+                return syntax;
             }
         }
 
@@ -270,14 +267,12 @@ impl<'p> Painter<'p> {
                         .paint(" ".repeat(config.available_terminal_width - text_width))
                         .to_string(),
                 );
-            } else if line_is_empty {
-                if let Some(empty_line_style) = empty_line_style {
-                    Painter::mark_empty_line(
-                        &empty_line_style,
-                        &mut line,
-                        if config.line_numbers { Some(" ") } else { None },
-                    );
-                }
+            } else if line_is_empty && let Some(empty_line_style) = empty_line_style {
+                Painter::mark_empty_line(
+                    &empty_line_style,
+                    &mut line,
+                    if config.line_numbers { Some(" ") } else { None },
+                );
             };
 
             output_buffer.push_str(&line);
@@ -446,10 +441,8 @@ impl<'p> Painter<'p> {
         let mut handled_prefix = false;
         for (section_style, text) in &superimposed {
             // If requested re-insert the +/- prefix with proper styling.
-            if !handled_prefix {
-                if let Some(painted_prefix) = painted_prefix.take() {
-                    ansi_strings.push(painted_prefix)
-                }
+            if !handled_prefix && let Some(painted_prefix) = painted_prefix.take() {
+                ansi_strings.push(painted_prefix)
             }
 
             if !text.is_empty() {
@@ -853,13 +846,13 @@ pub fn paint_file_path_with_line_number(
         };
         file_with_line_number.push(file_style.paint(file_path))
     };
-    if let Some(line_number) = line_number {
-        if let Some(line_number_style) = line_number_style {
-            if !file_with_line_number.is_empty() {
-                file_with_line_number.push(ansi_term::ANSIString::from(separator));
-            }
-            file_with_line_number.push(line_number_style.paint(format!("{line_number}")))
+    if let Some(line_number) = line_number
+        && let Some(line_number_style) = line_number_style
+    {
+        if !file_with_line_number.is_empty() {
+            file_with_line_number.push(ansi_term::ANSIString::from(separator));
         }
+        file_with_line_number.push(line_number_style.paint(format!("{line_number}")))
     }
     if terminate_with_separator {
         file_with_line_number.push(ansi_term::ANSIGenericString::from(separator));

@@ -2,10 +2,11 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use std::borrow::Cow;
 
-use crate::config::Config;
-use crate::delta::{State, StateMachine};
-use crate::features;
-use crate::utils;
+use crate::{
+    config::Config,
+    delta::{State, StateMachine},
+    features, utils,
+};
 
 impl StateMachine<'_> {
     #[inline]
@@ -19,16 +20,14 @@ impl StateMachine<'_> {
             return Ok(false);
         }
         let mut handled_line = false;
-        if self.config.relative_paths {
-            if let Some(cwd) = self.config.cwd_relative_to_repo_root.as_deref() {
-                if let Some(replacement_line) =
-                    relativize_path_in_diff_stat_line(&self.raw_line, cwd, self.config)
-                {
-                    self.painter.emit()?;
-                    writeln!(self.painter.writer, "{replacement_line}")?;
-                    handled_line = true
-                }
-            }
+        if self.config.relative_paths
+            && let Some(cwd) = self.config.cwd_relative_to_repo_root.as_deref()
+            && let Some(replacement_line) =
+                relativize_path_in_diff_stat_line(&self.raw_line, cwd, self.config)
+        {
+            self.painter.emit()?;
+            writeln!(self.painter.writer, "{replacement_line}")?;
+            handled_line = true
         }
         Ok(handled_line)
     }
