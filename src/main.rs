@@ -350,7 +350,7 @@ mod end2end {
     }
 
     #[test]
-    #[ignore = "Library format prevents fatal from panicking"]
+    // #[ignore = "Library format prevents fatal from panicking"]
     #[should_panic(expected = "unexpected delta argument")]
     fn just_delta_argument_error() {
         let mut writer = Cursor::new(vec![]);

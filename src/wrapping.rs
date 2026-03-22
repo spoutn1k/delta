@@ -1,8 +1,10 @@
+use std::num::{ParseFloatError, ParseIntError};
+
 use crate::{
     cli,
     config::{Config, INLINE_SYMBOL_WIDTH_1},
     delta::{DiffType, State},
-    errors::{Error, Result},
+    errors::Result,
     features::{
         line_numbers::{self, SideBySideLineWidth},
         side_by_side::{Left, Right, available_line_width, line_is_too_long},
@@ -15,6 +17,24 @@ use crate::{
 use syntect::highlighting::Style as SyntectStyle;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("bad fill alignment {0}")]
+    BadDiffAlignment(String),
+    #[error("bad wrap info {0}")]
+    BadWrapInfo(String),
+    #[error("bad syntax alignment {0}")]
+    BadAlignment(String),
+    #[error("Invalid wrap-max-lines argument: {0}")]
+    WrapMaxLinesParse(#[from] ParseIntError),
+    #[error("Could not parse wrap-right-percent argument: {0}")]
+    WrapRightPercentParse(#[from] ParseFloatError),
+    #[error("Invalid value for wrap-right-percent: {0}, not between 0 and 100.")]
+    WrapRightPercentInvalidValue(f64),
+    #[error("Invalid value for {0}, display width of \"{1}\" must be {2} but is {3}")]
+    DisplayWidthInvalidValue(String, String, usize, usize),
+}
 
 /// See [`wrap_line`] for documentation.
 #[derive(Clone, Debug)]
@@ -92,7 +112,7 @@ fn remove_percent_suffix(arg: &str) -> &str {
     }
 }
 
-fn ensure_display_width_1(what: &str, arg: String) -> Result<String> {
+fn ensure_display_width_1(what: &str, arg: String) -> std::result::Result<String, Error> {
     match arg.grapheme_indices(true).count() {
         INLINE_SYMBOL_WIDTH_1 => Ok(arg),
         width => Err(Error::DisplayWidthInvalidValue(
@@ -383,12 +403,15 @@ pub fn wrap_minusplus_block<'c: 'a, 'a>(
     alignment: &[(Option<usize>, Option<usize>)],
     line_width: &SideBySideLineWidth,
     wrapinfo: &'a MinusPlus<Vec<bool>>,
-) -> (
-    Vec<(Option<usize>, Option<usize>)>,
-    MinusPlus<Vec<State>>,
-    MinusPlus<Vec<LineSections<'a, SyntectStyle>>>,
-    MinusPlus<Vec<LineSections<'a, Style>>>,
-) {
+) -> std::result::Result<
+    (
+        Vec<(Option<usize>, Option<usize>)>,
+        MinusPlus<Vec<State>>,
+        MinusPlus<Vec<LineSections<'a, SyntectStyle>>>,
+        MinusPlus<Vec<LineSections<'a, Style>>>,
+    ),
+    Error,
+> {
     let mut new_alignment = Vec::new();
     let mut new_states = MinusPlus::<Vec<State>>::default();
     let mut new_wrapped_syntax = MinusPlus::default();
@@ -415,7 +438,7 @@ pub fn wrap_minusplus_block<'c: 'a, 'a>(
         line_width: usize,
         fill_style: &Style,
         errhint: &'a str,
-    ) -> (usize, usize)
+    ) -> std::result::Result<(usize, usize), Error>
     where
         ItSyn: Iterator<Item = LineSections<'a, SyntectStyle>>,
         ItDiff: Iterator<Item = LineSections<'a, Style>>,
@@ -423,14 +446,14 @@ pub fn wrap_minusplus_block<'c: 'a, 'a>(
     {
         let must_wrap = *wrapinfo_iter
             .next()
-            .unwrap_or_else(|| panic!("bad wrap info {}", errhint));
+            .ok_or(Error::BadWrapInfo(errhint.to_owned()))?;
 
         let (start, extended_to) = wrap_if_too_long(
             config,
             wrapped_syntax,
             syntax_iter
                 .next()
-                .unwrap_or_else(|| panic!("bad syntax alignment {}", errhint)),
+                .ok_or(Error::BadAlignment(errhint.to_owned()))?,
             must_wrap,
             line_width,
             &config.null_syntect_style,
@@ -455,7 +478,7 @@ pub fn wrap_minusplus_block<'c: 'a, 'a>(
             wrapped_diff,
             diff_iter
                 .next()
-                .unwrap_or_else(|| panic!("bad diff alignment {}", errhint)),
+                .ok_or(Error::BadDiffAlignment(errhint.to_owned()))?,
             must_wrap,
             line_width,
             fill_style,
@@ -470,7 +493,7 @@ pub fn wrap_minusplus_block<'c: 'a, 'a>(
             "syntax and diff wrapping differs {errhint}",
         );
 
-        (start, extended_to)
+        Ok((start, extended_to))
     }
 
     // This macro avoids having the same code block 4x in the alignment processing
@@ -489,7 +512,7 @@ pub fn wrap_minusplus_block<'c: 'a, 'a>(
                 line_width[$side],
                 &fill_style[$side],
                 $errhint,
-            )
+            )?
         }};
     }
 
@@ -565,12 +588,12 @@ pub fn wrap_minusplus_block<'c: 'a, 'a>(
         }
     }
 
-    (
+    Ok((
         new_alignment,
         new_states,
         new_wrapped_syntax,
         new_wrapped_diff,
-    )
+    ))
 }
 
 #[allow(clippy::comparison_chain, clippy::type_complexity)]

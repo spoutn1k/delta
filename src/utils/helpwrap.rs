@@ -130,26 +130,26 @@ mod test {
     fn simple_ascii_can_not_split() {
         let input = "000 123456789 abcdefghijklmnopqrstuvwxyz ok";
         let result = wrap(input, 5, "", "", "");
-        assert_snapshot!(result, @r###"
+        assert_snapshot!(result, @"
         000
         123456789
         abcdefghijklmnopqrstuvwxyz
         ok
-        "###);
+        ");
     }
 
     #[test]
     fn simple_ascii_just_whitespace() {
         let input = "               \n   \n           \n  \n \n     \n";
         let result = wrap(input, 3, "__", "", "");
-        assert_snapshot!(result, @r###"
+        assert_snapshot!(result, @"
         __
         __
         __
         __
         __
         __
-        "###);
+        ");
         let result = wrap(input, 3, "", "", "");
         assert_eq!(result, "\n\n\n\n\n\n");
     }
@@ -158,19 +158,19 @@ mod test {
     fn simple_ascii_can_not_split_plus_whitespace() {
         let input = "000        123456789          abcdefghijklmnopqrstuvwxyz          ok";
         let result = wrap(input, 5, "", "", "");
-        assert_snapshot!(result, @r###"
+        assert_snapshot!(result, @"
         000
         123456789
         abcdefghijklmnopqrstuvwxyz
         ok
-        "###);
+        ");
     }
 
     #[test]
     fn simple_ascii_keep_leading_input_indent() {
         let input = "abc\n  Def ghi jkl mno pqr stuv xyz\n    Abc def ghijklm\nok";
         let result = wrap(input, 10, "_", "", "");
-        assert_snapshot!(result, @r###"
+        assert_snapshot!(result, @"
         _abc
         _  Def ghi
         _  jkl mno
@@ -181,14 +181,14 @@ mod test {
         _    def
         _    ghijklm
         _ok
-        "###);
+        ");
     }
 
     #[test]
     fn simple_ascii_indent_and_bullet_points() {
         let input = "- ABC ABC abc\n   def ghi - jkl\n  - 1 22 3 4 55 6 7 8 9\n    - 1 22 3 4 55 6 7 8 9\n!- 0 0 0 0 0 0 0 \n";
         let result = wrap(input, 10, "", "!", "");
-        assert_snapshot!(result, @r###"
+        assert_snapshot!(result, @"
         - ABC ABC
           abc
            def ghi
@@ -203,32 +203,32 @@ mod test {
               9
         - 0 0 0 0
           0 0 0
-        "###);
+        ");
     }
 
     #[test]
     fn simple_ascii_all_overlong_after_indent() {
         let input = "0000 1111 2222";
         let result = wrap(input, 5, "__", "", "");
-        assert_snapshot!(result, @r###"
+        assert_snapshot!(result, @"
         __0000
         __1111
         __2222
-        "###);
+        ");
     }
 
     #[test]
     fn simple_ascii_one_line() {
         let input = "123 456 789 abc def ghi jkl mno pqr stu vwx yz";
         let result = wrap(input, 10, "__", "", "");
-        assert_snapshot!(result, @r###"
+        assert_snapshot!(result, @"
         __123 456
         __789 abc
         __def ghi
         __jkl mno
         __pqr stu
         __vwx yz
-        "###);
+        ");
     }
 
     #[test]
@@ -242,7 +242,7 @@ mod test {
     fn simple_ascii_two_lines() {
         let input = "123 456 789 abc def\nghi jkl mno pqr stu vwx yz\n1234 567 89 876 54321\n";
         let result = wrap(input, 10, "__", "", "");
-        assert_snapshot!(result, @r###"
+        assert_snapshot!(result, @"
         __123 456
         __789 abc
         __def
@@ -253,14 +253,14 @@ mod test {
         __1234 567
         __89 876
         __54321
-        "###);
+        ");
     }
 
     #[test]
     fn simple_ascii_no_indent() {
         let input = "123 456 789\n!!abc def ghi jkl mno pqr\nstu vwx yz\n\n";
         let result = wrap(input, 10, "__", "!!", "");
-        assert_snapshot!(result, @r###"
+        assert_snapshot!(result, @"
         __123 456
         __789
         abc def
@@ -269,14 +269,14 @@ mod test {
         __stu vwx
         __yz
         __
-        "###);
+        ");
     }
 
     #[test]
     fn simple_ascii_no_wrap() {
         let input = "123 456 789\n|abc def ghi jkl mno pqr\nstu vwx yz\n|W\nA B C D E F G H I\n";
         let result = wrap(input, 10, "__", "!!", "|");
-        assert_snapshot!(result, @r###"
+        assert_snapshot!(result, @"
         __123 456
         __789
         __abc def ghi jkl mno pqr
@@ -286,14 +286,14 @@ mod test {
         __A B C D
         __E F G H
         __I
-        "###);
+        ");
     }
 
     #[test]
     fn simple_ascii_no_both() {
         let input = "123 456 789\n!!|abc def ghi jkl mno pqr\nstu vwx yz\n|W\nA B C D E F G H I\n";
         let result = wrap(input, 10, "__", "!!", "|");
-        assert_snapshot!(result, @r###"
+        assert_snapshot!(result, @"
         __123 456
         __789
         abc def ghi jkl mno pqr
@@ -303,17 +303,17 @@ mod test {
         __A B C D
         __E F G H
         __I
-        "###);
+        ");
     }
 
     #[test]
     fn simple_ascii_no_both_wrong_order() {
         let input = "!!|abc def ghi jkl\n|!!ABC DEF GHI JKL + no-sanity\n";
         let result = wrap(input, 7, "__", "!!", "|");
-        assert_snapshot!(result, @r###"
+        assert_snapshot!(result, @"
         abc def ghi jkl
         __!!ABC DEF GHI JKL + no-sanity
-        "###);
+        ");
         let wrapped = wrap(
             "ab cd ef\n!NI!123\n|AB CD EF GH\n!NI!|123 456 789",
             6,
@@ -321,20 +321,20 @@ mod test {
             "!NI!",
             "|",
         );
-        assert_snapshot!(wrapped, @r###"
+        assert_snapshot!(wrapped, @"
         _ab cd
         _ef
         123
         _AB CD EF GH
         123 456 789
-        "###);
+        ");
     }
 
     #[test]
     fn simple_ascii_much_whitespace() {
         let input = "123       456       789\nabc   def  ghi    jkl   mno  pqr    \nstu   vwx yz";
         let result = wrap(input, 10, "__", "!!", "|");
-        assert_snapshot!(result, @r###"
+        assert_snapshot!(result, @"
         __123
         __456
         __789
@@ -344,6 +344,6 @@ mod test {
         __pqr
         __stu
         __vwx yz
-        "###);
+        ");
     }
 }

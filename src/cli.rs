@@ -1225,22 +1225,22 @@ pub enum Call<T> {
 }
 
 impl Opt {
-    fn handle_help_and_version(args: &[OsString]) -> Call<ArgMatches> {
+    fn handle_help_and_version(args: &[OsString]) -> Result<Call<ArgMatches>> {
         match Self::command().try_get_matches_from(args) {
             Err(e) if e.kind() == clap::error::ErrorKind::DisplayVersion => {
                 let version = Self::command().render_version();
-                Call::Version(version)
+                Ok(Call::Version(version))
             }
             Err(e) if e.kind() == clap::error::ErrorKind::DisplayHelp => {
                 let term = Term::stdout();
                 // No wrapping if short -h instead of --help was used:
                 if args.iter().any(|arg| arg == "-h") {
                     let help_clap = Self::command().render_help();
-                    return Call::Help(if term.is_term() {
+                    return Ok(Call::Help(if term.is_term() {
                         help_clap.ansi().to_string()
                     } else {
                         help_clap.to_string()
-                    });
+                    }));
                 }
 
                 let help_clap = Self::command().render_long_help();
@@ -1270,12 +1270,12 @@ impl Opt {
                 );
                 help.push_str(&after_help);
 
-                Call::Help(help)
+                Ok(Call::Help(help))
             }
             Err(e) => {
                 // Calls `e.exit()` if error persists.
-                let (matches, subcmd) = subcommands::extract(args, e);
-                Call::SubCommand(matches, subcmd)
+                let (matches, subcmd) = subcommands::extract(args, e)?;
+                Ok(Call::SubCommand(matches, subcmd))
             }
             Ok(matches) => {
                 // subcommands take precedence over diffs
@@ -1285,8 +1285,8 @@ impl Opt {
                     && subcommands::SUBCOMMANDS.contains(&arg)
                 {
                     let unreachable_error = Error::new(clap::error::ErrorKind::InvalidSubcommand);
-                    let (matches, subcmd) = subcommands::extract(args, unreachable_error);
-                    return Call::SubCommand(matches, subcmd);
+                    let (matches, subcmd) = subcommands::extract(args, unreachable_error)?;
+                    return Ok(Call::SubCommand(matches, subcmd));
                 }
 
                 match (
@@ -1294,9 +1294,9 @@ impl Opt {
                     matches.get_one::<PathBuf>("plus_file").map(PathBuf::from),
                 ) {
                     (Some(minus_file), Some(plus_file)) => {
-                        Call::DeltaDiff(matches, minus_file, plus_file)
+                        Ok(Call::DeltaDiff(matches, minus_file, plus_file))
                     }
-                    _ => Call::Delta(matches),
+                    _ => Ok(Call::Delta(matches)),
                 }
             }
         }
@@ -1314,7 +1314,7 @@ impl Opt {
             args.insert(0, OsString::from("delta"));
             args
         };
-        let (matches, call) = match Self::handle_help_and_version(&args) {
+        let (matches, call) = match Self::handle_help_and_version(&args)? {
             Call::Delta(t) => (t, Call::Delta(())),
             Call::DeltaDiff(t, a, b) => (t, Call::DeltaDiff((), a, b)),
             Call::SubCommand(t, cmd) => (t, Call::SubCommand((), cmd)),

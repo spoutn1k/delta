@@ -28,16 +28,18 @@ pub mod errors {
     use crate::{
         handlers::blame::BlameError,
         options::{self, set::SetError},
+        wrapping,
     };
-    use std::{
-        collections::HashSet,
-        num::{ParseFloatError, ParseIntError},
-    };
+    use std::collections::HashSet;
 
     pub type Result<T> = std::result::Result<T, Error>;
 
     #[derive(thiserror::Error, Debug)]
     pub enum Error {
+        #[error("parse error before subcommand: {0}")]
+        SubcommandParseError(String),
+        #[error("non-Delta Call variant should not occur here")]
+        InvalidCall,
         #[error("side-by-side requires Some(line_numbers_data)")]
         NoLineNumberData,
         #[error("Number of merge parents must be known.")]
@@ -107,14 +109,8 @@ delta is not an appropriate value for $PAGER \
         ShellParseError(#[from] shell_words::ParseError),
         #[error("Could not open stdin for pager")]
         NoStdin,
-        #[error("Invalid wrap-max-lines argument: {0}")]
-        WrapMaxLinesParse(#[from] ParseIntError),
-        #[error("Could not parse wrap-right-percent argument: {0}")]
-        WrapRightPercentParse(#[from] ParseFloatError),
-        #[error("Invalid value for wrap-right-percent: {0}, not between 0 and 100.")]
-        WrapRightPercentInvalidValue(f64),
-        #[error("Invalid value for {0}, display width of \"{1}\" must be {2} but is {3}")]
-        DisplayWidthInvalidValue(String, String, usize, usize),
+        #[error(transparent)]
+        WrappingError(#[from] wrapping::Error),
         #[error(transparent)]
         SetError(#[from] SetError),
         #[error(transparent)]

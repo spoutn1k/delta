@@ -320,11 +320,11 @@ index 0123456..1234567 100644
             .with_input(BINARY_FILES_DIFFER)
             .skip_header();
 
-        assert_snapshot!(output, @r###"
+        assert_snapshot!(output, @"
 
         modified: foo (binary file)
         ───────────────────────────────────────────
-        "###);
+        ");
     }
 
     #[test]
@@ -332,11 +332,11 @@ index 0123456..1234567 100644
         let output = DeltaTest::with_args(&[])
             .with_input(BINARY_FILE_ADDED)
             .skip_header();
-        assert_snapshot!(output, @r###"
+        assert_snapshot!(output, @"
 
         added: foo (binary file)
         ───────────────────────────────────────────
-        "###);
+        ");
     }
 
     #[test]
@@ -344,11 +344,11 @@ index 0123456..1234567 100644
         let output = DeltaTest::with_args(&[])
             .with_input(BINARY_FILE_REMOVED)
             .skip_header();
-        assert_snapshot!(output, @r###"
+        assert_snapshot!(output, @"
 
         removed: foo (binary file)
         ───────────────────────────────────────────
-        "###);
+        ");
     }
 
     #[test]
@@ -356,7 +356,7 @@ index 0123456..1234567 100644
         let output = DeltaTest::with_args(&["--file-modified-label", "modified:"])
             .with_input(BINARY_FILES_DIFFER_AFTER_OTHER)
             .output;
-        assert_snapshot!(output, @r###"
+        assert_snapshot!(output, @"
 
 
         renamed: foo ⟶   bar
@@ -364,7 +364,7 @@ index 0123456..1234567 100644
 
         modified: qux (binary file)
         ───────────────────────────────────────────
-        "###);
+        ");
     }
 
     #[test]
@@ -2007,7 +2007,7 @@ src/align.rs:71: impl<'a> Alignment<'a> { │
         ])
         .explain_ansi()
         .with_input(GIT_DIFF_SINGLE_HUNK);
-        assert_snapshot!(result.output, @r###"
+        assert_snapshot!(result.output, @"
         (normal)commit 94907c0f136f46dc46ffae2dc92dca9af7(reverse normal)→(normal)
         Author: Dan Davison <dandavison7@gmail.co(reverse normal)→(normal)
         Date:   Thu May 14 11:13:17 2020 -0400
@@ -2034,7 +2034,7 @@ src/align.rs:71: impl<'a> Alignment<'a> { │
         (231)                le(normal)t candidates = [
         (231)                  (normal)  Cell {
         (231)                  (normal)      parent: left,
-        "###);
+        ");
     }
 
     #[test]
@@ -2050,7 +2050,7 @@ src/align.rs:71: impl<'a> Alignment<'a> { │
         .with_input(GIT_DIFF_SINGLE_HUNK);
 
         // eprintln!("{}", result.raw_output);
-        assert_snapshot!(result.output, @r###"
+        assert_snapshot!(result.output, @"
         (normal)commit 94907c0f136f46dc46ffae2dc92dca9af7eb7c2e
         Author: Dan Davison <dandavison7@gmail.com>
         Date:   Thu May 14 11:13:17 2020 -0400
@@ -2084,7 +2084,7 @@ src/align.rs:71: impl<'a> Alignment<'a> { │
         (blue)│(238)    (blue)│(231)Ce(normal)ll {               (blue) │(238)    (blue)│(231)Ce(normal)ll {
         (blue)│(238) 80 (blue)│(231)                    (blue)↵(blue) │(238) 77 (blue)│(231)                    (blue)↵(normal)
         (blue)│(238)    (blue)│(231)  (normal)  parent: left,    (blue) │(238)    (blue)│(231)  (normal)  parent: left,
-        "###);
+        ");
     }
 
     #[test]
@@ -2093,7 +2093,7 @@ src/align.rs:71: impl<'a> Alignment<'a> { │
             .explain_ansi()
             .with_input(GIT_DIFF_ALL_UNICODE_W_FULLWIDTH);
 
-        assert_snapshot!(result.output, @r###"
+        assert_snapshot!(result.output, @"
         (normal)
 
         (blue)src/a(normal)
@@ -2111,7 +2111,7 @@ src/align.rs:71: impl<'a> Alignment<'a> { │
         (231)三æäöø€ÆÄÖ(normal)〇Øß三
         (231)三æäöø€ÆÄÖ(normal)〇Øß三
         (231)¶(normal)
-        "###);
+        ");
 
         let result = DeltaTest::with_args(&[
             "--max-syntax-highlighting-length=10",
@@ -2121,7 +2121,7 @@ src/align.rs:71: impl<'a> Alignment<'a> { │
         .with_input(GIT_DIFF_ALL_UNICODE_W_FULLWIDTH);
 
         // eprintln!("{}", result.raw_output);
-        assert_snapshot!(result.output, @r###"
+        assert_snapshot!(result.output, @"
         (normal)
 
         (blue)src/a(normal)
@@ -2139,7 +2139,7 @@ src/align.rs:71: impl<'a> Alignment<'a> { │
         (231)三æäöø€ÆÄÖ(normal)〇Øß→
         (231)三æäöø€ÆÄÖ(normal)〇Øß→
         (231)¶(normal)
-        "###);
+        ");
     }
 
     #[test]
@@ -2150,7 +2150,7 @@ src/align.rs:71: impl<'a> Alignment<'a> { │
                 .explain_ansi()
                 .with_input(GIT_DIFF_OF_WIDTH_81);
 
-        assert_snapshot!(result.output, @r###"
+        assert_snapshot!(result.output, @"
         (normal)
         --- a.rs
         +++ b.rs
@@ -2159,7 +2159,7 @@ src/align.rs:71: impl<'a> Alignment<'a> { │
         (normal 52)-//                            and it works fine with minus lines, however     81(normal)
         (dim normal 234) (242)//         styled(!) zero lines can only be as long as the width fallback of 80(normal)
         (dim normal 234) (231)panic!(); (242)/*     if no tty can be queried, and delta crashes on longer lines: 81(normal)
-        "###);
+        ");
     }
 
     const GIT_DIFF_OF_WIDTH_81: &str = r#"

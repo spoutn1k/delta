@@ -666,7 +666,8 @@ new mode 100755
 
         let result = DeltaTest::with_args(&[]).with_input(input);
 
-        assert_snapshot!(result.output, @r"
+        assert_snapshot!(result.output, @"
+
         a.txt
         ───────────────────────────────────────────
 
@@ -701,7 +702,8 @@ new mode 100755
 
         let result = DeltaTest::with_args(&[]).with_input(input);
 
-        assert_snapshot!(result.output, @r"
+        assert_snapshot!(result.output, @"
+
         a.txt
         ───────────────────────────────────────────
 
@@ -741,7 +743,7 @@ index 0000000..323fae0
             .output;
         // convert windows '..\' to unix '../' paths
         insta::with_settings!({filters => vec![(r"\.\.\\", "../")]}, {
-            assert_snapshot!(result, @r###"
+            assert_snapshot!(result, @"
 
             added: ../../BIN (binary file)
             ───────────────────────────────────────────
@@ -753,7 +755,7 @@ index 0000000..323fae0
             1: │
             ───┘
             │    │                │  1 │plain text
-            "###)
+            ")
         });
     }
 
@@ -797,7 +799,7 @@ index 0000000..323fae0
             .explain_ansi()
             .with_input(DIFF_AMBIGUOUS_HEADER_3X_MINUS);
 
-        assert_snapshot!(result.output, @r###"
+        assert_snapshot!(result.output, @r#"
         (normal)
         (blue)a.lua ⟶   b.lua(normal)
         (blue)───────────────────────────────────────────(normal)
@@ -810,8 +812,7 @@ index 0000000..323fae0
         (81)print(231)((186)"Hello"(231))(normal)
         (normal 52)-- World?(normal)
         (81)print(231)((186)".."(231))(normal)
-
-        "###);
+        "#);
     }
 
     #[test]
@@ -825,7 +826,7 @@ index 0000000..323fae0
                 DIFF_AMBIGUOUS_HEADER_3X_MINUS_LAST_LINE
             ));
 
-        assert_snapshot!(result.output, @r###"
+        assert_snapshot!(result.output, @r#"
         (normal)
         (blue)e.lua ⟶   f.lua(normal)
         (blue)───────────────────────────────────────────(normal)
@@ -872,7 +873,7 @@ index 0000000..323fae0
 
         (81)print(231)((186)"Hello"(231))(normal)
         (normal 52)-- World?(normal)
-        "###);
+        "#);
     }
 
     #[test]
@@ -886,7 +887,7 @@ index 0000000..323fae0
                 DIFF_AMBIGUOUS_HEADER_3X_MINUS_LAST_LINE
             ));
 
-        assert_snapshot!(result.output, @r###"
+        assert_snapshot!(result.output, @r#"
         (normal)extra 1
 
 
@@ -939,6 +940,6 @@ index 0000000..323fae0
 
         (81)print(231)((186)"Hello"(231))(normal)
         (normal 52)-- World?(normal)
-        "###);
+        "#);
     }
 }

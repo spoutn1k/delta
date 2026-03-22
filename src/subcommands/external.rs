@@ -1,5 +1,5 @@
-use crate::cli::Opt;
-use clap::{ArgMatches, CommandFactory, Error};
+use crate::{cli::Opt, errors::Result};
+use clap::{ArgMatches, CommandFactory};
 use std::ffi::{OsStr, OsString};
 
 pub const RG: &str = "rg";
@@ -71,7 +71,7 @@ impl SubCommand {
 /// tuple containing:
 /// - The args prior to that point (delta can understand these)
 /// - A SubCommand representing the external subcommand and its subsequent args
-pub fn extract(args: &[OsString], orig_error: Error) -> (ArgMatches, SubCommand) {
+pub fn extract(args: &[OsString], orig_error: clap::Error) -> Result<(ArgMatches, SubCommand)> {
     for (subcmd_pos, arg) in args.iter().filter_map(|a| a.to_str()).enumerate() {
         if SUBCOMMANDS.contains(&arg) {
             match Opt::command().try_get_matches_from(&args[..subcmd_pos]) {
@@ -113,14 +113,16 @@ pub fn extract(args: &[OsString], orig_error: Error) -> (ArgMatches, SubCommand)
                         .chain(args[subcmd_args_index..].iter().map(OsString::from))
                         .collect();
 
-                    return (matches, SubCommand::new(kind, subcmd));
+                    return Ok((matches, SubCommand::new(kind, subcmd)));
                 }
                 Err(_) => {
                     // part before the subcommand failed to parse, report that error
                     #[cfg(not(test))]
                     orig_error.exit();
                     #[cfg(test)]
-                    panic!("parse error before subcommand ");
+                    Err(crate::errors::Error::SubcommandParseError(format!(
+                        "{orig_error}"
+                    )))?
                 }
             }
         }
@@ -130,7 +132,9 @@ pub fn extract(args: &[OsString], orig_error: Error) -> (ArgMatches, SubCommand)
     orig_error.exit();
     #[cfg(test)]
     {
-        let _ = orig_error;
+        Err(crate::errors::Error::SubcommandParseError(format!(
+            "{orig_error}"
+        )))?;
         panic!("unexpected delta argument");
     }
 }

@@ -1,7 +1,7 @@
 use crate::{
     cli, color, colors, config, delta,
     env::DeltaEnv,
-    errors::Result,
+    errors::{Error, Result},
     paint,
     paint::BgShouldFill,
     style,
@@ -19,15 +19,15 @@ pub fn show_colors() -> Result<()> {
 
     let opt = match cli::Opt::from_args_and_git_config(args, &env, assets)? {
         (cli::Call::Delta(_), Some(opt)) => opt,
-        _ => panic!("non-Delta Call variant should not occur here"),
+        _ => Err(Error::InvalidCall)?,
     };
 
     let config = config::Config::try_from(opt)?;
     let pagercfg = (&config).into();
 
     let mut output_type =
-        OutputType::from_mode(&env, PagingMode::QuitIfOneScreen, None, &pagercfg).unwrap();
-    let writer = output_type.handle().unwrap();
+        OutputType::from_mode(&env, PagingMode::QuitIfOneScreen, None, &pagercfg)?;
+    let writer = output_type.handle()?;
 
     let mut painter = paint::Painter::new(writer, &config)?;
     painter.set_syntax(Some("a.ts"))?;
@@ -55,9 +55,8 @@ pub fn show_colors() -> Result<()> {
                 )
             }
             // Two syntax-highlighted lines with background color
-            let color = color::parse_color(color_name, config.true_color, config.git_config())
-                .unwrap()
-                .unwrap();
+            let color =
+                color::parse_color(color_name, config.true_color, config.git_config())?.unwrap();
             style.ansi_term_style.background = Some(color);
             for line in [
                 &format!(r#"export function color(): string {{ return "{color_name}" }}"#),

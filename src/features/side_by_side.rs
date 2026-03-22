@@ -161,7 +161,7 @@ pub fn paint_minus_and_plus_lines_side_by_side(
             &line_alignment,
             &line_width,
             &long_lines,
-        )
+        )?
     } else {
         (line_alignment, line_states, syntax_sections, diff_sections)
     };
@@ -608,10 +608,10 @@ pub mod tests {
         let result = DeltaTest::with_args(&["--side-by-side"])
             .with_input(TWO_MINUS_LINES_DIFF)
             .skip_header();
-        assert_snapshot!(result, @r###"
+        assert_snapshot!(result, @"
         │  1 │a = 1           │    │
         │  2 │b = 23456       │    │
-        "###
+        "
         );
     }
 

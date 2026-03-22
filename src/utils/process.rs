@@ -1,13 +1,11 @@
+use crate::utils::DELTA_ATOMIC_ORDERING;
+use lazy_static::lazy_static;
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
     sync::{Arc, Condvar, Mutex, MutexGuard, atomic::AtomicUsize},
 };
-
-use lazy_static::lazy_static;
 use sysinfo::{Pid, PidExt, Process, ProcessExt, ProcessRefreshKind, SystemExt};
-
-use crate::utils::DELTA_ATOMIC_ORDERING;
 
 pub type DeltaPid = u32;
 
