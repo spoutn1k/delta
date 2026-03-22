@@ -4,6 +4,7 @@ use regex::Regex;
 use crate::{
     delta::{State, StateMachine},
     errors::Result,
+    style::Style,
 };
 
 impl StateMachine<'_> {
@@ -36,16 +37,15 @@ impl StateMachine<'_> {
                 self.state = State::SubmoduleShort(commit.to_owned());
             } else if let State::SubmoduleShort(minus_commit) = &self.state {
                 self.painter.emit()?;
-                writeln!(
-                    self.painter.writer,
-                    "{}..{}",
+                self.painter.writer.buffer(&[
                     self.config
                         .minus_style
                         .paint(minus_commit.chars().take(12).collect::<String>()),
+                    Style::new().paint(".."),
                     self.config
                         .plus_style
                         .paint(commit.chars().take(12).collect::<String>()),
-                )?;
+                ])
             }
         }
         Ok(true)

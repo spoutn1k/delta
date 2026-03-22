@@ -1,7 +1,14 @@
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 pub mod ansi_test_utils {
-    use crate::{ansi, config::Config, delta::State, errors::Result, paint, style::Style};
+    use crate::{
+        ansi,
+        config::Config,
+        delta::State,
+        errors::Result,
+        paint::{self, BufferedANSIWrite},
+        style::Style,
+    };
     use ansi_term;
 
     // Check if `output[line_number]` start with `expected_prefix`
@@ -179,8 +186,10 @@ pub mod ansi_test_utils {
         state: State,
         config: &Config,
     ) -> String {
-        let mut output_buffer = String::new();
-        let mut unused_writer = Vec::<u8>::new();
+        let mut output_buffer = Vec::<u8>::new();
+        let mut output_writer = BufferedANSIWrite::from_writer(&mut output_buffer);
+        let mut unused_buffer = Vec::<u8>::new();
+        let mut unused_writer = BufferedANSIWrite::from_writer(&mut unused_buffer);
         let mut painter = paint::Painter::new(&mut unused_writer, config).unwrap();
         let syntax_highlighted_style = Style {
             is_syntax_highlighted: true,
@@ -200,13 +209,14 @@ pub mod ansi_test_utils {
             &syntax_style_sections,
             &diff_style_sections,
             &[false],
-            &mut output_buffer,
+            &mut output_writer,
             config,
             &mut None,
             None,
             paint::BgShouldFill::default(),
         );
-        output_buffer
+
+        String::from_utf8(output_buffer).unwrap()
     }
 
     fn _line_extract<'a>(output: &'a str, line_number: usize, expected_prefix: &str) -> &'a str {

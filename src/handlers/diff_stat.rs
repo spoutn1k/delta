@@ -26,7 +26,7 @@ impl StateMachine<'_> {
                 relativize_path_in_diff_stat_line(&self.raw_line, cwd, self.config)
         {
             self.painter.emit()?;
-            writeln!(self.painter.writer, "{replacement_line}")?;
+            self.painter.writer.push_str(&replacement_line);
             handled_line = true
         }
         Ok(handled_line)

@@ -158,7 +158,7 @@ impl StateMachine<'_> {
                 ),
                 &mut self.painter.line_numbers_data,
                 &mut self.painter.highlighter,
-                &mut self.painter.output_buffer,
+                self.painter.writer,
                 self.config,
             )?;
             self.painter.emit()?;
@@ -215,11 +215,11 @@ fn write_merge_conflict_bar(
         cli::Width::Fixed(width) => width,
         cli::Width::Variable => config.available_terminal_width,
     };
-    writeln!(
-        painter.writer,
-        "{}",
-        &s.graphemes(true).cycle().take(width).join("")
-    )?;
+
+    painter
+        .writer
+        .push_str(&s.graphemes(true).cycle().take(width).join(""));
+
     Ok(())
 }
 

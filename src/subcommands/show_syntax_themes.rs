@@ -5,6 +5,7 @@ use crate::{
     env::DeltaEnv,
     errors::{Error, Result},
     options::theme::color_mode_from_syntax_theme,
+    paint::BufferedANSIWrite,
     utils::{
         self,
         bat::output::{OutputType, PagingMode},
@@ -98,9 +99,11 @@ index f38589a..0f1bb83 100644
             title_style.paint(syntax_theme)
         )?;
         config.syntax_theme = Some(assets.get_theme(syntax_theme).clone());
-        if let Err(Error::Io(error)) =
-            delta::delta(ByteLines::new(BufReader::new(&input[0..])), writer, &config)
-        {
+        if let Err(Error::Io(error)) = delta::delta(
+            ByteLines::new(BufReader::new(&input[0..])),
+            &mut BufferedANSIWrite::from_writer(writer),
+            &config,
+        ) {
             match error.kind() {
                 ErrorKind::BrokenPipe => std::process::exit(0),
                 _ => eprintln!("{error}"),

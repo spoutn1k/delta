@@ -1,22 +1,23 @@
+use ansi_term::ANSIString;
+
+use crate::{
+    ansi,
+    cli::Width,
+    paint::Backend,
+    style::{DecorationStyle, Style},
+};
 use std::cmp::max;
-use std::io::Write;
 
-use crate::ansi;
-use crate::cli::Width;
-use crate::style::{DecorationStyle, Style};
-
-fn paint_text(text_style: Style, text: &str, addendum: &str) -> String {
+fn paint_text<'a>(text_style: Style, text: &'a str, addendum: &str) -> ANSIString<'a> {
     if addendum.is_empty() {
-        text_style.paint(text).to_string()
+        text_style.paint(text)
     } else {
-        text_style
-            .paint(text.to_string() + " (" + addendum + ")")
-            .to_string()
+        text_style.paint(format!("{text} ({addendum})"))
     }
 }
 
 pub type DrawFunction = dyn FnMut(
-    &mut dyn Write,
+    &mut dyn Backend,
     &str,
     &str,
     &str,
@@ -53,7 +54,7 @@ pub fn get_draw_function(
 }
 
 fn write_no_decoration(
-    writer: &mut dyn Write,
+    writer: &mut dyn Backend,
     text: &str,
     raw_text: &str,
     addendum: &str,
@@ -62,9 +63,12 @@ fn write_no_decoration(
     _decoration_style: ansi_term::Style,
 ) -> std::io::Result<()> {
     if text_style.is_raw {
-        writeln!(writer, "{raw_text}")?;
+        writer.push_str(&format!("{raw_text}\n"));
     } else {
-        writeln!(writer, "{}", paint_text(text_style, text, addendum))?;
+        writer.buffer(&[
+            paint_text(text_style, text, addendum),
+            Style::new().paint("\n"),
+        ]);
     }
     Ok(())
 }
@@ -72,7 +76,7 @@ fn write_no_decoration(
 /// Write text to stream, surrounded by a box, leaving the cursor just
 /// beyond the bottom right corner.
 pub fn write_boxed(
-    writer: &mut dyn Write,
+    writer: &mut dyn Backend,
     text: &str,
     raw_text: &str,
     addendum: &str,
@@ -86,6 +90,7 @@ pub fn write_boxed(
         box_drawing::light::UP_LEFT
     };
     let box_width = ansi::measure_text_width(text);
+
     write_boxed_partial(
         writer,
         text,
@@ -95,14 +100,15 @@ pub fn write_boxed(
         text_style,
         decoration_style,
     )?;
-    writeln!(writer, "{}", decoration_style.paint(up_left))?;
+
+    writer.buffer(&[decoration_style.paint(up_left), Style::new().paint("\n")]);
     Ok(())
 }
 
 /// Write text to stream, surrounded by a box, and extend a line from
 /// the bottom right corner.
 fn write_boxed_with_underline(
-    writer: &mut dyn Write,
+    writer: &mut dyn Backend,
     text: &str,
     raw_text: &str,
     addendum: &str,
@@ -134,8 +140,7 @@ fn write_boxed_with_underline(
         text_style,
         decoration_style,
     )?;
-    writeln!(writer)?;
-    Ok(())
+    writer.writeln()
 }
 
 enum UnderOverline {
@@ -145,7 +150,7 @@ enum UnderOverline {
 }
 
 fn write_underlined(
-    writer: &mut dyn Write,
+    writer: &mut dyn Backend,
     text: &str,
     raw_text: &str,
     addendum: &str,
@@ -166,7 +171,7 @@ fn write_underlined(
 }
 
 fn write_overlined(
-    writer: &mut dyn Write,
+    writer: &mut dyn Backend,
     text: &str,
     raw_text: &str,
     addendum: &str,
@@ -187,7 +192,7 @@ fn write_overlined(
 }
 
 fn write_underoverlined(
-    writer: &mut dyn Write,
+    writer: &mut dyn Backend,
     text: &str,
     raw_text: &str,
     addendum: &str,
@@ -210,7 +215,7 @@ fn write_underoverlined(
 #[allow(clippy::too_many_arguments)]
 fn _write_under_or_over_lined(
     underoverline: UnderOverline,
-    writer: &mut dyn Write,
+    writer: &mut dyn Backend,
     text: &str,
     raw_text: &str,
     addendum: &str,
@@ -223,19 +228,21 @@ fn _write_under_or_over_lined(
         Width::Fixed(n) => max(n, text_width),
         Width::Variable => text_width,
     };
-    let write_line = |writer: &mut dyn Write| -> std::io::Result<()> {
+    let write_line = |writer: &mut dyn Backend| -> std::io::Result<()> {
         write_horizontal_line(writer, line_width, text_style, decoration_style)?;
-        writeln!(writer)?;
-        Ok(())
+        writer.writeln()
     };
     match underoverline {
         UnderOverline::Under => {}
         _ => write_line(writer)?,
     }
     if text_style.is_raw {
-        writeln!(writer, "{raw_text}")?;
+        writer.push_str(&format!("{}\n", raw_text));
     } else {
-        writeln!(writer, "{}", paint_text(text_style, text, addendum))?;
+        writer.buffer(&[
+            paint_text(text_style, text, addendum),
+            Style::new().paint("\n"),
+        ]);
     }
     match underoverline {
         UnderOverline::Over => {}
@@ -245,7 +252,7 @@ fn _write_under_or_over_lined(
 }
 
 fn write_horizontal_line(
-    writer: &mut dyn Write,
+    writer: &mut dyn Backend,
     width: usize,
     _text_style: Style,
     decoration_style: ansi_term::Style,
@@ -255,15 +262,14 @@ fn write_horizontal_line(
     } else {
         box_drawing::light::HORIZONTAL
     };
-    write!(
-        writer,
-        "{}",
-        decoration_style.paint(horizontal.repeat(width))
-    )
+
+    writer.buffer(&[decoration_style.paint(horizontal.repeat(width))]);
+
+    Ok(())
 }
 
 fn write_boxed_with_horizontal_whisker(
-    writer: &mut dyn Write,
+    writer: &mut dyn Backend,
     text: &str,
     raw_text: &str,
     addendum: &str,
@@ -285,12 +291,14 @@ fn write_boxed_with_horizontal_whisker(
         text_style,
         decoration_style,
     )?;
-    write!(writer, "{}", decoration_style.paint(up_horizontal))?;
+
+    writer.buffer(&[decoration_style.paint(up_horizontal)]);
+
     Ok(())
 }
 
 fn write_boxed_partial(
-    writer: &mut dyn Write,
+    writer: &mut dyn Backend,
     text: &str,
     raw_text: &str,
     addendum: &str,
@@ -312,21 +320,23 @@ fn write_boxed_partial(
         )
     };
     let horizontal_edge = horizontal.repeat(box_width);
-    writeln!(
-        writer,
-        "{}{}",
+    writer.buffer(&[
         decoration_style.paint(&horizontal_edge),
         decoration_style.paint(down_left),
-    )?;
+        Style::new().paint("\n"),
+    ]);
+
     if text_style.is_raw {
-        write!(writer, "{raw_text}")?;
+        writer.push_str(raw_text);
     } else {
-        write!(writer, "{}", paint_text(text_style, text, addendum))?;
+        writer.buffer(&[paint_text(text_style, text, addendum)]);
     }
-    write!(
-        writer,
-        "{}\n{}",
+
+    writer.buffer(&[
         decoration_style.paint(vertical),
+        Style::new().paint("\n"),
         decoration_style.paint(&horizontal_edge),
-    )
+    ]);
+
+    Ok(())
 }

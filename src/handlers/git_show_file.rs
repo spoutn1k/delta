@@ -11,6 +11,7 @@ impl StateMachine<'_> {
     pub fn handle_git_show_file_line(&mut self) -> Result<bool> {
         self.painter.emit()?;
         let mut handled_line = false;
+
         if matches!(self.state, State::Unknown) {
             if let process::CallingProcess::GitShow(_, Some(filename)) =
                 &*process::calling_process()
@@ -21,6 +22,7 @@ impl StateMachine<'_> {
                 return Ok(handled_line);
             }
         }
+
         if matches!(self.state, State::GitShowFile) {
             self.painter.set_highlighter();
             self.painter.syntax_highlight_and_paint_line(

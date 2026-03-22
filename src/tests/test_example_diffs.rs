@@ -2018,7 +2018,7 @@ src/align.rs:71: impl<'a> Alignment<'a> { │
         (blue)src/align.rs(normal)
         (blue)───────────────────────────────────────────(normal)
 
-        (blue)─────────────────────────────(blue)┐(normal)
+        (blue)─────────────────────────────┐(normal)
         (blue)71(normal):(231) (81)impl(231)<(203)'a(231)> (149)Alignmen(normal)t<'a> { (blue)│(normal)
         (blue)─────────────────────────────(blue)┘(normal)
 
@@ -2061,7 +2061,7 @@ src/align.rs:71: impl<'a> Alignment<'a> { │
         (blue)src/align.rs(normal)
         (blue)───────────────────────────────────────────────────────(normal)
 
-        (blue)─────────────────────────────(blue)┐(normal)
+        (blue)─────────────────────────────┐(normal)
         (blue)71(normal):(231) (81)impl(231)<(203)'a(231)> (149)Alignment(231)<(203)'a(normal)> { (blue)│(normal)
         (blue)─────────────────────────────(blue)┘(normal)
 
@@ -2099,7 +2099,7 @@ src/align.rs:71: impl<'a> Alignment<'a> { │
         (blue)src/a(normal)
         (blue)───────────────────────────────────────────(normal)
 
-        (blue)───(blue)┐(normal)
+        (blue)───┐(normal)
         (blue)1(normal): (blue)│(normal)
         (blue)───(blue)┘(normal)
         (231)一æäöø€ÆÄÖ(normal)〇Øß一
@@ -2127,7 +2127,7 @@ src/align.rs:71: impl<'a> Alignment<'a> { │
         (blue)src/a(normal)
         (blue)───────────────────────────────────────────(normal)
 
-        (blue)───(blue)┐(normal)
+        (blue)───┐(normal)
         (blue)1(normal): (blue)│(normal)
         (blue)───(blue)┘(normal)
         (231)一æäöø€ÆÄÖ(normal)〇Øß→

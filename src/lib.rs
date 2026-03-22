@@ -13,7 +13,7 @@ mod git_config;
 mod handlers;
 mod minusplus;
 mod options;
-mod paint;
+pub mod paint;
 mod parse_style;
 mod parse_styles;
 mod style;

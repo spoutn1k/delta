@@ -6,7 +6,7 @@ use crate::{
     errors::{Error, Result},
     features::{OptionValueFunction, line_numbers},
     minusplus::*,
-    paint::{BgFillMethod, BgShouldFill, LineSections, Painter},
+    paint::{Backend, BgFillMethod, BgShouldFill, LineSections, Painter},
     style::Style,
     wrapping::{wrap_minusplus_block, wrap_zero_block},
 };
@@ -116,7 +116,7 @@ pub fn paint_minus_and_plus_lines_side_by_side(
     lines_have_homolog: LeftRight<Vec<bool>>,
     line_alignment: Vec<(Option<usize>, Option<usize>)>,
     line_numbers_data: &mut Option<LineNumbersData>,
-    output_buffer: &mut String,
+    output_buffer: &mut dyn Backend,
     config: &config::Config,
 ) -> Result<()> {
     let line_states = LeftRight::new(
@@ -201,7 +201,7 @@ pub fn paint_minus_and_plus_lines_side_by_side(
             bg_should_fill[Right],
             config,
         ));
-        output_buffer.push('\n');
+        output_buffer.push_char('\n');
 
         // HACK: The left line number is not getting incremented in `linenumbers_and_styles()`
         // when the alignment matches a minus with a plus line, so fix that here and take
@@ -228,7 +228,7 @@ pub fn paint_zero_lines_side_by_side<'a>(
     line: &str,
     syntax_style_sections: Vec<LineSections<'a, SyntectStyle>>,
     diff_style_sections: Vec<LineSections<'a, Style>>,
-    output_buffer: &mut String,
+    output_buffer: &mut dyn Backend,
     config: &Config,
     line_numbers_data: &mut Option<&mut line_numbers::LineNumbersData>,
     painted_prefix: Option<ansi_term::ANSIString>,
@@ -274,7 +274,7 @@ pub fn paint_zero_lines_side_by_side<'a>(
             );
             output_buffer.push_str(&panel_line);
         }
-        output_buffer.push('\n');
+        output_buffer.push_char('\n');
     }
 }
 

@@ -6,6 +6,7 @@ use git_delta::{
     delta::delta,
     env,
     errors::{Error, Result},
+    paint::BufferedANSIWrite,
     subcommands::{self, SubCmdKind, SubCommand},
     utils,
     utils::bat::{
@@ -135,13 +136,14 @@ pub fn run_app(args: Vec<OsString>, capture_output: Option<&mut Cursor<Vec<u8>>>
     } else {
         config.paging_mode
     };
+
     let mut output_type =
-        OutputType::from_mode(&env, paging_mode, config.pager.clone(), &pager_cfg).unwrap();
-    let mut writer: &mut dyn Write = if paging_mode == PagingMode::Capture {
-        &mut capture_output.unwrap()
-    } else {
-        output_type.handle().unwrap()
-    };
+        OutputType::from_mode(&env, paging_mode, config.pager.clone(), &pager_cfg)?;
+
+    let mut writer = BufferedANSIWrite::from_writer(match capture_output {
+        Some(sink) => sink,
+        None => output_type.handle()?,
+    });
 
     let subcmd = match call {
         Call::DeltaDiff(_, minus, plus) => {
@@ -168,9 +170,8 @@ pub fn run_app(args: Vec<OsString>, capture_output: Option<&mut Cursor<Vec<u8>>>
             return Ok(config.error_exit_code);
         }
 
-        let res = delta(io::stdin().lock().byte_lines(), &mut writer, &config);
-
-        if let Err(Error::Io(error)) = res {
+        if let Err(Error::Io(error)) = delta(io::stdin().lock().byte_lines(), &mut writer, &config)
+        {
             match error.kind() {
                 ErrorKind::BrokenPipe => return Ok(0),
                 _ => {

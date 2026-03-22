@@ -12,8 +12,8 @@ use bytelines::ByteLines;
 use itertools::Itertools;
 
 use crate::{
-    ansi, cli, config, delta::delta, env::DeltaEnv, git_config::GitConfig, tests::test_utils,
-    utils::process::tests::FakeParentArgs,
+    ansi, cli, config, delta::delta, env::DeltaEnv, git_config::GitConfig,
+    paint::BufferedANSIWrite, tests::test_utils, utils::process::tests::FakeParentArgs,
 };
 
 pub fn make_options_from_args_and_git_config(
@@ -300,7 +300,8 @@ impl DeltaTestOutput {
 }
 
 pub fn run_delta(input: &str, config: &config::Config) -> String {
-    let mut writer: Vec<u8> = Vec::new();
+    let mut buffer: Vec<u8> = Vec::new();
+    let mut writer = BufferedANSIWrite::from_writer(&mut buffer);
 
     delta(
         ByteLines::new(BufReader::new(input.as_bytes())),
@@ -308,7 +309,8 @@ pub fn run_delta(input: &str, config: &config::Config) -> String {
         config,
     )
     .unwrap();
-    String::from_utf8(writer).unwrap()
+
+    String::from_utf8(buffer).unwrap()
 }
 
 pub mod tests {

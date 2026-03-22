@@ -5,37 +5,94 @@ use crate::{
     edits,
     errors::{Error, Result},
     features::{
-        hyperlinks,
         line_numbers::{self, LineNumbersData},
         side_by_side::{self, PanelSide, ansifill},
     },
-    handlers::merge_conflict,
+    handlers::merge_conflict::{self, MergeConflictCommitNames, MergeConflictLines},
     minusplus::*,
     paint::superimpose_style_sections::superimpose_style_sections,
-    style,
-    style::Style,
-    utils,
+    style::{self, Style},
     utils::tabs,
 };
-use ansi_term::ANSIString;
+use ansi_term::{ANSIString, ANSIStrings};
 use itertools::Itertools;
-use std::{borrow::Cow, collections::HashMap, io::Write};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    io::{self, Write},
+    path::Path,
+};
 use syntect::{
     easy::HighlightLines,
     highlighting::Style as SyntectStyle,
     parsing::{SyntaxReference, SyntaxSet},
 };
 
+pub trait Backend {
+    fn emit(&mut self) -> io::Result<()>;
+
+    fn buffer(&mut self, line: &[ANSIString]);
+
+    fn push_str(&mut self, data: &str);
+    fn push_char(&mut self, data: char);
+    fn writeln(&mut self) -> io::Result<()>;
+
+    fn clear(&mut self);
+}
+
+pub struct BufferedANSIWrite<'p> {
+    buffer: String,
+    writer: &'p mut dyn Write,
+}
+
+impl<'p> BufferedANSIWrite<'p> {
+    pub fn from_writer(writer: &'p mut dyn Write) -> Self {
+        Self {
+            buffer: String::new(),
+            writer,
+        }
+    }
+}
+
+impl<'p> Backend for BufferedANSIWrite<'p> {
+    fn emit(&mut self) -> io::Result<()> {
+        write!(self.writer, "{}", self.buffer)?;
+        self.buffer.clear();
+
+        Ok(())
+    }
+
+    fn buffer(&mut self, line: &[ANSIString]) {
+        self.buffer.push_str(&ANSIStrings(line).to_string());
+    }
+
+    fn push_str(&mut self, data: &str) {
+        self.buffer.push_str(data)
+    }
+
+    fn push_char(&mut self, data: char) {
+        self.buffer.push(data)
+    }
+
+    fn writeln(&mut self) -> io::Result<()> {
+        self.buffer.push('\n');
+        Ok(())
+    }
+
+    fn clear(&mut self) {
+        self.buffer.clear()
+    }
+}
+
 pub type LineSections<'a, S> = Vec<(S, &'a str)>;
 
 pub struct Painter<'p> {
     pub minus_lines: Vec<(String, State)>,
     pub plus_lines: Vec<(String, State)>,
-    pub writer: &'p mut dyn Write,
+    pub writer: &'p mut dyn Backend,
     pub syntax: &'p SyntaxReference,
     pub highlighter: Option<HighlightLines<'p>>,
     pub config: &'p config::Config,
-    pub output_buffer: String,
     // If config.line_numbers is true, then the following is always Some().
     // In side-by-side mode it is always Some (but possibly an empty one), even
     // if config.line_numbers is false. See `UseFullPanelWidth` as well.
@@ -74,7 +131,7 @@ pub enum StyleSectionSpecifier<'l> {
 }
 
 impl<'p> Painter<'p> {
-    pub fn new(writer: &'p mut dyn Write, config: &'p config::Config) -> Result<Self> {
+    pub fn new(writer: &'p mut dyn Backend, config: &'p config::Config) -> Result<Self> {
         let default_syntax = Self::get_syntax(&config.syntax_set, None, &config.default_language)?;
         let panel_width_fix = ansifill::UseFullPanelWidth::new(config);
 
@@ -93,17 +150,17 @@ impl<'p> Painter<'p> {
         } else {
             None
         };
+
         Ok(Self {
             minus_lines: Vec::new(),
             plus_lines: Vec::new(),
-            output_buffer: String::new(),
             syntax: default_syntax,
             highlighter: None,
             writer,
             config,
             line_numbers_data,
-            merge_conflict_lines: merge_conflict::MergeConflictLines::default(),
-            merge_conflict_commit_names: merge_conflict::MergeConflictCommitNames::default(),
+            merge_conflict_lines: MergeConflictLines::default(),
+            merge_conflict_commit_names: MergeConflictCommitNames::default(),
         })
     }
 
@@ -123,7 +180,7 @@ impl<'p> Painter<'p> {
         fallback: &str,
     ) -> Result<&'a SyntaxReference> {
         if let Some(filename) = filename {
-            let path = std::path::Path::new(filename);
+            let path = Path::new(filename);
             let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
             let extension = path.extension().and_then(|x| x.to_str()).unwrap_or("");
 
@@ -167,7 +224,7 @@ impl<'p> Painter<'p> {
             MinusPlus::new(&self.minus_lines, &self.plus_lines),
             &mut self.line_numbers_data,
             &mut self.highlighter,
-            &mut self.output_buffer,
+            self.writer,
             self.config,
         )?;
         self.minus_lines.clear();
@@ -181,7 +238,8 @@ impl<'p> Painter<'p> {
         let syntax_style_sections =
             get_syntax_style_sections_for_lines(lines, self.highlighter.as_mut(), self.config);
         let mut diff_style_sections = vec![vec![(self.config.zero_style, lines[0].0.as_str())]]; // TODO: compute style from state
-        Painter::update_diff_style_sections(
+
+        update_diff_style_sections(
             lines,
             &mut diff_style_sections,
             None,
@@ -195,7 +253,7 @@ impl<'p> Painter<'p> {
                 &lines[0].0,
                 syntax_style_sections,
                 diff_style_sections,
-                &mut self.output_buffer,
+                self.writer,
                 self.config,
                 &mut self.line_numbers_data.as_mut(),
                 painted_prefix(state, self.config),
@@ -207,7 +265,7 @@ impl<'p> Painter<'p> {
                 &syntax_style_sections,
                 diff_style_sections.as_slice(),
                 &[false],
-                &mut self.output_buffer,
+                self.writer,
                 self.config,
                 &mut self.line_numbers_data.as_mut(),
                 None,
@@ -224,7 +282,7 @@ impl<'p> Painter<'p> {
         syntax_style_sections: &[LineSections<'a, SyntectStyle>],
         diff_style_sections: &[LineSections<'a, Style>],
         lines_have_homolog: &[bool],
-        output_buffer: &mut String,
+        output_buffer: &mut dyn Backend,
         config: &config::Config,
         line_numbers_data: &mut Option<&mut line_numbers::LineNumbersData>,
         empty_line_style: Option<Style>, // a style with background color to highlight an empty line
@@ -280,7 +338,7 @@ impl<'p> Painter<'p> {
             };
 
             output_buffer.push_str(&line);
-            output_buffer.push('\n');
+            output_buffer.push_char('\n');
         }
     }
 
@@ -295,20 +353,45 @@ impl<'p> Painter<'p> {
         state: State,
         background_color_extends_to_terminal_width: BgShouldFill,
     ) {
-        let lines = vec![(tabs::expand(line, &self.config.tab_cfg), state)];
+        Painter::_syntax_highlight_and_paint_line(
+            line,
+            style_sections,
+            state,
+            background_color_extends_to_terminal_width,
+            self.config,
+            self.highlighter.as_mut(),
+            self.writer,
+        )
+    }
+
+    /// Write painted line to the output buffer, with syntax-highlighting and `style` superimposed.
+    // Note that, if passing `style_sections` as
+    // `StyleSectionSpecifier::StyleSections`, then tabs must already have been
+    // expanded in the text.
+    pub fn _syntax_highlight_and_paint_line(
+        line: &str,
+        style_sections: StyleSectionSpecifier,
+        state: State,
+        background_color_extends_to_terminal_width: BgShouldFill,
+        config: &Config,
+        highlighter: Option<&mut HighlightLines<'p>>,
+        writer: &mut dyn Backend,
+    ) {
+        let lines = vec![(tabs::expand(line, &config.tab_cfg), state)];
         let syntax_style_sections =
-            get_syntax_style_sections_for_lines(&lines, self.highlighter.as_mut(), self.config);
+            get_syntax_style_sections_for_lines(&lines, highlighter, config);
         let diff_style_sections = match style_sections {
             StyleSectionSpecifier::Style(style) => vec![vec![(style, lines[0].0.as_str())]],
             StyleSectionSpecifier::StyleSections(style_sections) => vec![style_sections],
         };
+
         Painter::paint_lines(
             &lines,
             &syntax_style_sections,
             &diff_style_sections,
             &[false],
-            &mut self.output_buffer,
-            self.config,
+            writer,
+            config,
             &mut None,
             None,
             background_color_extends_to_terminal_width,
@@ -435,6 +518,7 @@ impl<'p> Painter<'p> {
                 ))
             }
         }
+
         let superimposed = superimpose_style_sections(
             syntax_sections,
             diff_sections,
@@ -457,14 +541,13 @@ impl<'p> Painter<'p> {
 
         // Only if syntax is empty (implies diff empty) can a line actually be empty.
         let is_empty = syntax_sections.is_empty();
+
         (ansi_term::ANSIStrings(&ansi_strings).to_string(), is_empty)
     }
 
     /// Write output buffer to output stream, and clear the buffer.
     pub fn emit(&mut self) -> std::io::Result<()> {
-        write!(self.writer, "{}", self.output_buffer)?;
-        self.output_buffer.clear();
-        Ok(())
+        self.writer.emit()
     }
 
     pub fn should_compute_syntax_highlighting(state: &State, config: &config::Config) -> bool {
@@ -511,70 +594,70 @@ impl<'p> Painter<'p> {
             }
         }
     }
+}
 
-    /// There are some rules according to which we update line section styles that were computed
-    /// during the initial edit inference pass. This function applies those rules. The rules are
-    /// 1. If there are multiple diff styles in the line, then the line must have some
-    ///    inferred edit operations and so, if there is a special non-emph style that is
-    ///    distinct from the default style, then it should be used for the non-emph style
-    ///    sections.
-    /// 2. If the line constitutes a whitespace error, then the whitespace error style
-    ///    should be applied to the added material.
-    /// 3. If delta recognized the raw line as one containing ANSI colors that
-    ///    are going to be preserved in the output, then replace delta's
-    ///    computed diff styles with these styles from the raw line. (This is
-    ///    how support for git's --color-moved is implemented.)
-    fn update_diff_style_sections<'a>(
-        lines: &'a [(String, State)],
-        diff_style_sections: &mut Vec<LineSections<'a, Style>>,
-        whitespace_error_style: Option<Style>,
-        non_emph_style: Option<Style>,
-        lines_have_homolog: &[bool],
-        config: &config::Config,
-    ) {
-        for (((_, state), style_sections), line_has_homolog) in lines
-            .iter()
-            .zip_eq(diff_style_sections)
-            .zip_eq(lines_have_homolog)
+/// There are some rules according to which we update line section styles that were computed
+/// during the initial edit inference pass. This function applies those rules. The rules are
+/// 1. If there are multiple diff styles in the line, then the line must have some
+///    inferred edit operations and so, if there is a special non-emph style that is
+///    distinct from the default style, then it should be used for the non-emph style
+///    sections.
+/// 2. If the line constitutes a whitespace error, then the whitespace error style
+///    should be applied to the added material.
+/// 3. If delta recognized the raw line as one containing ANSI colors that
+///    are going to be preserved in the output, then replace delta's
+///    computed diff styles with these styles from the raw line. (This is
+///    how support for git's --color-moved is implemented.)
+fn update_diff_style_sections<'a>(
+    lines: &'a [(String, State)],
+    diff_style_sections: &mut Vec<LineSections<'a, Style>>,
+    whitespace_error_style: Option<Style>,
+    non_emph_style: Option<Style>,
+    lines_have_homolog: &[bool],
+    config: &config::Config,
+) {
+    for (((_, state), style_sections), line_has_homolog) in lines
+        .iter()
+        .zip_eq(diff_style_sections)
+        .zip_eq(lines_have_homolog)
+    {
+        if let State::HunkMinus(_, Some(raw_line))
+        | State::HunkZero(_, Some(raw_line))
+        | State::HunkPlus(_, Some(raw_line)) = state
         {
-            if let State::HunkMinus(_, Some(raw_line))
-            | State::HunkZero(_, Some(raw_line))
-            | State::HunkPlus(_, Some(raw_line)) = state
-            {
-                // raw_line is captured in handle_hunk_line under certain conditions. If we have
-                // done so, then overwrite the style sections with styles parsed directly from the
-                // raw line. Currently the only reason this is done is to handle a diff.colorMoved
-                // line.
-                *style_sections = parse_style_sections(raw_line, config);
-                continue;
+            // raw_line is captured in handle_hunk_line under certain conditions. If we have
+            // done so, then overwrite the style sections with styles parsed directly from the
+            // raw line. Currently the only reason this is done is to handle a diff.colorMoved
+            // line.
+            *style_sections = parse_style_sections(raw_line, config);
+            continue;
+        }
+        let line_has_emph_and_non_emph_sections =
+            style_sections_contain_more_than_one_style(style_sections);
+        let should_update_non_emph_styles = non_emph_style.is_some() && *line_has_homolog;
+
+        // TODO: Git recognizes blank lines at end of file (blank-at-eof)
+        // as a whitespace error but delta does not yet.
+        // https://git-scm.com/docs/git-config#Documentation/git-config.txt-corewhitespace
+        let mut is_whitespace_error = whitespace_error_style.is_some();
+        for (style, s) in style_sections.iter_mut().rev() {
+            if is_whitespace_error && !s.trim().is_empty() {
+                is_whitespace_error = false;
             }
-            let line_has_emph_and_non_emph_sections =
-                style_sections_contain_more_than_one_style(style_sections);
-            let should_update_non_emph_styles = non_emph_style.is_some() && *line_has_homolog;
+            // If the line as a whole constitutes a whitespace error then highlight this
+            // section if either (a) it is an emph section, or (b) the line lacks any
+            // emph/non-emph distinction.
 
-            // TODO: Git recognizes blank lines at end of file (blank-at-eof)
-            // as a whitespace error but delta does not yet.
-            // https://git-scm.com/docs/git-config#Documentation/git-config.txt-corewhitespace
-            let mut is_whitespace_error = whitespace_error_style.is_some();
-            for (style, s) in style_sections.iter_mut().rev() {
-                if is_whitespace_error && !s.trim().is_empty() {
-                    is_whitespace_error = false;
-                }
-                // If the line as a whole constitutes a whitespace error then highlight this
-                // section if either (a) it is an emph section, or (b) the line lacks any
-                // emph/non-emph distinction.
-
-                // TODO: is this logic correct now, after introducing
-                // line_has_homolog for non_emph style?
-                if is_whitespace_error && (style.is_emph || !line_has_emph_and_non_emph_sections) {
+            // TODO: is this logic correct now, after introducing
+            // line_has_homolog for non_emph style?
+            if is_whitespace_error && (style.is_emph || !line_has_emph_and_non_emph_sections) {
+                *style = whitespace_error_style.unwrap();
+            }
+            // Otherwise, update the style if this is a non-emph section that needs updating.
+            else if should_update_non_emph_styles && !style.is_emph {
+                *style = non_emph_style.unwrap();
+                if is_whitespace_error {
                     *style = whitespace_error_style.unwrap();
-                }
-                // Otherwise, update the style if this is a non-emph section that needs updating.
-                else if should_update_non_emph_styles && !style.is_emph {
-                    *style = non_emph_style.unwrap();
-                    if is_whitespace_error {
-                        *style = whitespace_error_style.unwrap();
-                    }
                 }
             }
         }
@@ -610,7 +693,7 @@ pub fn paint_minus_and_plus_lines(
     lines: MinusPlus<&Vec<(String, State)>>,
     line_numbers_data: &mut Option<LineNumbersData>,
     highlighter: &mut Option<HighlightLines>,
-    output_buffer: &mut String,
+    output_buffer: &mut dyn Backend,
     config: &config::Config,
 ) -> Result<()> {
     let syntax_style_sections = MinusPlus::new(
@@ -618,8 +701,10 @@ pub fn paint_minus_and_plus_lines(
         get_syntax_style_sections_for_lines(lines[Plus], highlighter.as_mut(), config),
     );
     let (mut diff_style_sections, line_alignment) = get_diff_style_sections(&lines, config)?;
+
     let lines_have_homolog = edits::make_lines_have_homolog(&line_alignment);
-    Painter::update_diff_style_sections(
+
+    update_diff_style_sections(
         lines[Minus],
         &mut diff_style_sections[Minus],
         None,
@@ -631,7 +716,8 @@ pub fn paint_minus_and_plus_lines(
         &lines_have_homolog[Minus],
         config,
     );
-    Painter::update_diff_style_sections(
+
+    update_diff_style_sections(
         lines[Plus],
         &mut diff_style_sections[Plus],
         Some(config.whitespace_error_style),
@@ -643,6 +729,7 @@ pub fn paint_minus_and_plus_lines(
         &lines_have_homolog[Plus],
         config,
     );
+
     if config.side_by_side_data.is_some() {
         side_by_side::paint_minus_and_plus_lines_side_by_side(
             lines,
@@ -669,6 +756,7 @@ pub fn paint_minus_and_plus_lines(
                 BgShouldFill::default(),
             );
         }
+
         if !lines[Plus].is_empty() {
             Painter::paint_lines(
                 lines[Plus],
@@ -841,16 +929,16 @@ pub fn parse_style_sections<'a>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn paint_file_path_with_line_number(
+pub fn paint_file_path_with_line_number<'a>(
     line_number: Option<usize>,
-    file_path: &str,
+    file_path: &'a str,
     pad_line_number: bool,
-    separator: &str,
+    separator: &'a str,
     terminate_with_separator: bool,
     file_style: Option<Style>,        // None means do not include file path
     line_number_style: Option<Style>, // None means do not include line number
     config: &Config,
-) -> String {
+) -> Vec<ANSIString<'a>> {
     let mut file_with_line_number = Vec::new();
     if let Some(file_style) = file_style {
         let file_path = if let Some(regex_replacement) = &config.file_regex_replacement {
@@ -887,21 +975,23 @@ pub fn paint_file_path_with_line_number(
             _ => {}
         }
     }
-    let file_with_line_number = ansi_term::ANSIStrings(&file_with_line_number).to_string();
-    match if config.hyperlinks && !file_with_line_number.is_empty() {
-        utils::path::absolute_path(file_path, config)
-    } else {
-        None
-    } {
-        Some(absolute_path) => hyperlinks::format_osc8_file_hyperlink(
-            absolute_path,
-            line_number,
-            &file_with_line_number,
-            config,
-        )
-        .into(),
-        _ => file_with_line_number,
-    }
+    // let file_with_line_number = ansi_term::ANSIStrings(&file_with_line_number).to_string();
+    // match if config.hyperlinks && !file_with_line_number.is_empty() {
+    //     utils::path::absolute_path(file_path, config)
+    // } else {
+    //     None
+    // } {
+    //     Some(absolute_path) => hyperlinks::format_osc8_file_hyperlink(
+    //         absolute_path,
+    //         line_number,
+    //         &file_with_line_number,
+    //         config,
+    //     )
+    //     .into(),
+    //     _ => file_with_line_number,
+    // }
+
+    file_with_line_number
 }
 
 // edits::annotate doesn't return "coalesced" annotations (see comment there), so we can't assume

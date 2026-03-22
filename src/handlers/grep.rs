@@ -159,7 +159,7 @@ impl StateMachine<'_> {
         if new_path {
             // Emit new path header line
             if !first_path {
-                writeln!(self.painter.writer)?;
+                self.painter.writer.writeln()?;
             }
             handlers::hunk_header::write_line_of_code_with_optional_path_and_line_number(
                 "",
@@ -180,7 +180,7 @@ impl StateMachine<'_> {
             )?
         }
         if new_section {
-            writeln!(self.painter.writer, "--")?;
+            self.painter.writer.push_str("--\n");
         }
         // Emit the actual grep hit line
         let code_style_sections = match (&grep_line.line_type, &grep_line.submatches) {
@@ -270,18 +270,16 @@ impl StateMachine<'_> {
             }
             _ => {
                 if self.config.navigate {
-                    write!(
-                        self.painter.writer,
-                        "{}",
-                        match (
-                            &grep_line.line_type,
-                            OUTPUT_CONFIG.add_navigate_marker_to_matches
-                        ) {
-                            (LineType::Match, true) => "• ",
-                            (_, true) => "  ",
-                            _ => "",
-                        }
-                    )?
+                    let marker = match (
+                        &grep_line.line_type,
+                        OUTPUT_CONFIG.add_navigate_marker_to_matches,
+                    ) {
+                        (LineType::Match, true) => "• ",
+                        (_, true) => "  ",
+                        _ => "",
+                    };
+
+                    self.painter.writer.push_str(marker);
                 }
                 self._emit_classic_format_file_and_line_number(&grep_line)?;
                 self._emit_classic_format_code(grep_line)?;
@@ -306,10 +304,9 @@ impl StateMachine<'_> {
             // ":" for matches and non-matches alike.
             &self.config.grep_separator_symbol
         };
-        write!(
-            self.painter.writer,
-            "{}",
-            paint::paint_file_path_with_line_number(
+        self.painter
+            .writer
+            .buffer(&paint::paint_file_path_with_line_number(
                 grep_line.line_number,
                 &grep_line.path,
                 OUTPUT_CONFIG.pad_line_number,
@@ -317,9 +314,9 @@ impl StateMachine<'_> {
                 true,
                 Some(self.config.grep_file_style),
                 Some(self.config.grep_line_number_style),
-                self.config
-            )
-        )?;
+                self.config,
+            ));
+
         Ok(())
     }
 

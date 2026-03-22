@@ -284,7 +284,7 @@ pub fn write_generic_diff_header_header_line(
         draw::get_draw_function(config.file_style.decoration_style);
     if !config.color_only {
         // Maintain 1-1 correspondence between input and output lines.
-        writeln!(painter.writer)?;
+        painter.writer.writeln()?;
     }
     draw_fn(
         painter.writer,
@@ -804,7 +804,7 @@ index 0000000..323fae0
         (blue)a.lua ⟶   b.lua(normal)
         (blue)───────────────────────────────────────────(normal)
 
-        (blue)───(blue)┐(normal)
+        (blue)───┐(normal)
         (blue)1(normal): (blue)│(normal)
         (blue)───(blue)┘(normal)
         (203)#(231)!(203)/(231)usr(203)/(231)bin(203)/(231)env lua(normal)
@@ -831,21 +831,21 @@ index 0000000..323fae0
         (blue)e.lua ⟶   f.lua(normal)
         (blue)───────────────────────────────────────────(normal)
 
-        (blue)───(blue)┐(normal)
+        (blue)───┐(normal)
         (blue)3(normal): (blue)│(normal)
         (blue)───(blue)┘(normal)
         (81)print(231)((186)"Hello"(231))(normal)
         (normal 52)-- World?(normal)
         (81)print(231)((186)""(231))(normal)
 
-        (blue)───(blue)┐(normal)
+        (blue)───┐(normal)
         (blue)6(normal): (blue)│(normal)
         (blue)───(blue)┘(normal)
         (81)print(231)((186)""(231))(normal)
         (81 22)print(231)((186)"World"(231))(normal)
         (81)print(231)((186)""(231))(normal)
 
-        (blue)────(blue)┐(normal)
+        (blue)────┐(normal)
         (blue)10(normal): (blue)│(normal)
         (blue)────(blue)┘(normal)
         (81)print(231)((186)""(231))(normal)
@@ -854,7 +854,7 @@ index 0000000..323fae0
         (blue)a.lua ⟶   b.lua(normal)
         (blue)───────────────────────────────────────────(normal)
 
-        (blue)───(blue)┐(normal)
+        (blue)───┐(normal)
         (blue)1(normal): (blue)│(normal)
         (blue)───(blue)┘(normal)
         (203)#(231)!(203)/(231)usr(203)/(231)bin(203)/(231)env lua(normal)
@@ -866,7 +866,7 @@ index 0000000..323fae0
         (blue)c.lua ⟶   d.lua(normal)
         (blue)───────────────────────────────────────────(normal)
 
-        (blue)───(blue)┐(normal)
+        (blue)───┐(normal)
         (blue)1(normal): (blue)│(normal)
         (blue)───(blue)┘(normal)
         (203)#(231)!(203)/(231)usr(203)/(231)bin(203)/(231)env lua(normal)
@@ -894,21 +894,21 @@ index 0000000..323fae0
         (blue)e.lua ⟶   f.lua(normal)
         (blue)───────────────────────────────────────────(normal)
 
-        (blue)───(blue)┐(normal)
+        (blue)───┐(normal)
         (blue)3(normal): (blue)│(normal)
         (blue)───(blue)┘(normal)
         (81)print(231)((186)"Hello"(231))(normal)
         (normal 52)-- World?(normal)
         (81)print(231)((186)""(231))(normal)
 
-        (blue)───(blue)┐(normal)
+        (blue)───┐(normal)
         (blue)6(normal): (blue)│(normal)
         (blue)───(blue)┘(normal)
         (81)print(231)((186)""(231))(normal)
         (81 22)print(231)((186)"World"(231))(normal)
         (81)print(231)((186)""(231))(normal)
 
-        (blue)────(blue)┐(normal)
+        (blue)────┐(normal)
         (blue)10(normal): (blue)│(normal)
         (blue)────(blue)┘(normal)
         (81)print(231)((186)""(231))(normal)
@@ -919,7 +919,7 @@ index 0000000..323fae0
         (blue)a.lua ⟶   b.lua(normal)
         (blue)───────────────────────────────────────────(normal)
 
-        (blue)───(blue)┐(normal)
+        (blue)───┐(normal)
         (blue)1(normal): (blue)│(normal)
         (blue)───(blue)┘(normal)
         (203)#(231)!(203)/(231)usr(203)/(231)bin(203)/(231)env lua(normal)
@@ -933,7 +933,7 @@ index 0000000..323fae0
         (blue)c.lua ⟶   d.lua(normal)
         (blue)───────────────────────────────────────────(normal)
 
-        (blue)───(blue)┐(normal)
+        (blue)───┐(normal)
         (blue)1(normal): (blue)│(normal)
         (blue)───(blue)┘(normal)
         (203)#(231)!(203)/(231)usr(203)/(231)bin(203)/(231)env lua(normal)

@@ -7,6 +7,7 @@ use crate::{
     errors::{Error, Result},
     git_config,
     options::get::get_themes,
+    paint::{Backend, BufferedANSIWrite},
     utils::bat::output::{OutputType, PagingMode},
 };
 use bytelines::ByteLines;
@@ -47,7 +48,7 @@ pub fn show_themes(dark: bool, light: bool, color_mode: ColorMode) -> Result<()>
     )
     .unwrap();
     let title_style = ansi_term::Style::new().bold();
-    let writer = output_type.handle().unwrap();
+    let mut writer = BufferedANSIWrite::from_writer(output_type.handle().unwrap());
 
     for theme in &themes {
         let git_config = git_config::GitConfig::try_create(&env)?;
@@ -61,11 +62,13 @@ pub fn show_themes(dark: bool, light: bool, color_mode: ColorMode) -> Result<()>
             || (color_mode == ColorMode::Light && is_light_theme)
             || (dark && light)
         {
-            writeln!(writer, "\n\nTheme: {}\n", title_style.paint(theme))?;
+            writer.push_str(&format!("\n\nTheme: {}\n", title_style.paint(theme)));
 
-            if let Err(Error::Io(error)) =
-                delta::delta(ByteLines::new(BufReader::new(&input[0..])), writer, &config)
-            {
+            if let Err(Error::Io(error)) = delta::delta(
+                ByteLines::new(BufReader::new(&input[0..])),
+                &mut writer,
+                &config,
+            ) {
                 match error.kind() {
                     ErrorKind::BrokenPipe => std::process::exit(0),
                     _ => eprintln!("{error}"),

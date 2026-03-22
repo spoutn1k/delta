@@ -124,9 +124,9 @@ impl StateMachine<'_> {
                 // to this.
                 self.painter.paint_buffered_minus_and_plus_lines()?;
                 self.painter
-                    .output_buffer
+                    .writer
                     .push_str(&tabs::expand(&self.raw_line, &self.config.tab_cfg));
-                self.painter.output_buffer.push('\n');
+                self.painter.writer.push_char('\n');
                 State::HunkZero(Unified, None)
             }
         };
@@ -290,7 +290,7 @@ mod tests {
                     11,
                     "
 #indent_mark
-(blue)───(blue)┐(normal)
+(blue)───┐(normal)
 (blue)1(normal): (blue)│(normal)
 (blue)───(blue)┘(normal)
     (red)[-aaa-](green){+bbb+}(normal)
@@ -308,7 +308,7 @@ mod tests {
                     11,
                     "
 #indent_mark
-(blue)───(blue)┐(normal)
+(blue)───┐(normal)
 (blue)1(normal): (blue)│(normal)
 (blue)───(blue)┘(normal)
     (red)aaa(green)bbb(normal)

@@ -5,13 +5,14 @@ use crate::{
     paint,
     paint::BgShouldFill,
     style,
+    style::Style,
     utils::bat::output::{OutputType, PagingMode},
 };
 use std::convert::TryFrom as _;
 
 #[cfg(not(tarpaulin_include))]
 pub fn show_colors() -> Result<()> {
-    use crate::{delta::DiffType, utils};
+    use crate::{delta::DiffType, paint::BufferedANSIWrite, utils};
 
     let args = std::env::args_os().collect::<Vec<_>>();
     let env = DeltaEnv::default();
@@ -27,9 +28,9 @@ pub fn show_colors() -> Result<()> {
 
     let mut output_type =
         OutputType::from_mode(&env, PagingMode::QuitIfOneScreen, None, &pagercfg)?;
-    let writer = output_type.handle()?;
+    let mut writer = BufferedANSIWrite::from_writer(output_type.handle()?);
 
-    let mut painter = paint::Painter::new(writer, &config)?;
+    let mut painter = paint::Painter::new(&mut writer, &config)?;
     painter.set_syntax(Some("a.ts"))?;
     painter.set_highlighter();
 
@@ -39,7 +40,11 @@ pub fn show_colors() -> Result<()> {
         ..style::Style::default()
     };
     for (group, color_names) in colors::color_groups() {
-        writeln!(painter.writer, "\n\n{}\n", title_style.paint(group))?;
+        painter.writer.buffer(&[
+            Style::new().paint("\n\n"),
+            title_style.paint(group),
+            Style::new().paint("\n"),
+        ]);
         for (color_name, hex) in color_names {
             // Two syntax-highlighted lines without background color
             style.ansi_term_style.background = None;

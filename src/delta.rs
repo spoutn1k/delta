@@ -8,7 +8,7 @@ use crate::{
         hunk_header::{AmbiguousDiffMinusCounter, ParsedHunkHeader},
         merge_conflict,
     },
-    paint::Painter,
+    paint::{Backend, Painter},
     style::DecorationStyle,
     utils,
 };
@@ -16,7 +16,7 @@ use bytelines::ByteLines;
 use std::{
     borrow::Cow,
     collections::HashMap,
-    io::{self, BufRead, IsTerminal, Write},
+    io::{self, BufRead, IsTerminal},
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -117,7 +117,7 @@ pub struct StateMachine<'a> {
     pub minus_line_counter: AmbiguousDiffMinusCounter,
 }
 
-pub fn delta<I>(lines: ByteLines<I>, writer: &mut dyn Write, config: &Config) -> Result<()>
+pub fn delta<I>(lines: ByteLines<I>, writer: &mut dyn Backend, config: &Config) -> Result<()>
 where
     I: BufRead,
 {
@@ -125,7 +125,7 @@ where
 }
 
 impl<'a> StateMachine<'a> {
-    pub fn new(writer: &'a mut dyn Write, config: &'a Config) -> Result<Self> {
+    pub fn new(writer: &'a mut dyn Backend, config: &'a Config) -> Result<Self> {
         Ok(Self {
             line: "".to_string(),
             raw_line: "".to_string(),
@@ -189,6 +189,7 @@ impl<'a> StateMachine<'a> {
         self.handle_pending_line_with_diff_name()?;
         self.painter.paint_buffered_minus_and_plus_lines()?;
         self.painter.emit()?;
+
         Ok(())
     }
 
@@ -248,11 +249,10 @@ impl<'a> StateMachine<'a> {
     /// Emit unchanged any line that delta does not handle.
     pub fn emit_line_unchanged(&mut self) -> std::io::Result<bool> {
         self.painter.emit()?;
-        writeln!(
-            self.painter.writer,
-            "{}",
+        self.painter.writer.push_str(&format!(
+            "{}\n",
             format_raw_line(&self.raw_line, self.config)
-        )?;
+        ));
         let handled_line = true;
         Ok(handled_line)
     }

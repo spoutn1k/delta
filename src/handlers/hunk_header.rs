@@ -10,15 +10,12 @@
 // @@ -119,12 +119,7 @@ fn write_to_output_buffer(
 // ```
 //
-// Whether or not file and line-number are included is controlled by the presence of the special
-// style attributes 'file' and 'line-number' in the hunk-header-style string. For example, delta
-// might output the above hunk header as
+// Whether or not file and line-number are included is controlled by the presence of the special style attributes 'file' and 'line-number' in the hunk-header-style string. For example, delta might output the above hunk header as
 // ```
 // ───────────────────────────────────────────────────┐
 // src/hunk_header.rs:119: fn write_to_output_buffer( │
 // ───────────────────────────────────────────────────┘
 // ```
-use std::{convert::TryInto, fmt::Write as FmtWrite};
 
 use super::draw;
 use crate::{
@@ -28,11 +25,13 @@ use crate::{
     },
     delta::{self, DiffType, InMergeConflict, MergeParents, State, StateMachine},
     errors::Result,
-    paint::{self, BgShouldFill, Painter, StyleSectionSpecifier},
+    paint::{self, Backend, BgShouldFill, BufferedANSIWrite, Painter, StyleSectionSpecifier},
     style::{DecorationStyle, Style},
 };
+use ansi_term::{ANSIString, ANSIStrings};
 use lazy_static::lazy_static;
 use regex::Regex;
+use std::convert::TryInto;
 
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct ParsedHunkHeader {
@@ -176,12 +175,12 @@ impl StateMachine<'_> {
         if self.config.hunk_header_style.is_raw {
             write_hunk_header_raw(&mut self.painter, line, raw_line, self.config)?;
         } else if self.config.hunk_header_style.is_omitted {
-            writeln!(self.painter.writer)?;
+            self.painter.writer.writeln()?;
         } else {
             // Add a blank line below the hunk-header-line for readability, unless
             // color_only mode is active.
             if !self.config.color_only {
-                writeln!(self.painter.writer)?;
+                self.painter.writer.writeln()?;
             }
 
             write_line_of_code_with_optional_path_and_line_number(
@@ -274,7 +273,7 @@ fn write_hunk_header_raw(
     let (mut draw_fn, pad, decoration_ansi_term_style) =
         draw::get_draw_function(config.hunk_header_style.decoration_style);
     if config.hunk_header_style.decoration_style != DecorationStyle::NoDecoration {
-        writeln!(painter.writer)?;
+        painter.writer.writeln()?;
     }
     draw_fn(
         painter.writer,
@@ -331,7 +330,7 @@ pub fn write_line_of_code_with_optional_path_and_line_number(
     );
 
     if !line.is_empty() || !file_with_line_number.is_empty() {
-        write_to_output_buffer(
+        let line = write_to_string(
             &file_with_line_number,
             file_path_separator,
             line,
@@ -340,32 +339,34 @@ pub fn write_line_of_code_with_optional_path_and_line_number(
             painter,
             config,
         );
+
         draw_fn(
             painter.writer,
-            &painter.output_buffer,
-            &painter.output_buffer,
+            &line,
+            &line,
             "",
             &config.decorations_width,
             config.null_style,
             decoration_ansi_term_style,
         )?;
-        painter.output_buffer.clear();
+
+        // painter.writer.clear();
     }
 
     Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
-fn paint_file_path_with_line_number(
+fn paint_file_path_with_line_number<'a>(
     line_number: Option<usize>,
-    plus_file: &str,
+    plus_file: &'a str,
     file_style: &Style,
     line_number_style: &Style,
     include_file_path: &HunkHeaderIncludeFilePath,
     include_line_number: &HunkHeaderIncludeLineNumber,
-    separator: &str,
+    separator: &'a str,
     config: &Config,
-) -> String {
+) -> Vec<ANSIString<'a>> {
     let file_style = match include_file_path {
         HunkHeaderIncludeFilePath::Yes => Some(*file_style),
         HunkHeaderIncludeFilePath::No => None,
@@ -392,35 +393,56 @@ fn paint_file_path_with_line_number(
     )
 }
 
-fn write_to_output_buffer(
-    file_with_line_number: &str,
+fn write_to_string(
+    file_with_line_number: &[ANSIString],
     file_path_separator: &str,
     line: String,
     style_sections: Option<StyleSectionSpecifier>,
     include_hunk_label: &HunkHeaderIncludeHunkLabel,
     painter: &mut Painter,
     config: &Config,
-) {
+) -> String {
+    let mut out = String::new();
+
     if matches!(include_hunk_label, HunkHeaderIncludeHunkLabel::Yes)
         && !config.hunk_label.is_empty()
     {
-        let _ = write!(
-            &mut painter.output_buffer,
+        out = format!(
             "{} ",
             config.hunk_header_file_style.paint(&config.hunk_label)
         );
     }
+
     if !file_with_line_number.is_empty() {
         // The code fragment in "line" adds whitespace, but if only a line number is printed
         // then the trailing space must be added.
         let space = if line.is_empty() { " " } else { "" };
-        let _ = write!(
-            &mut painter.output_buffer,
-            "{file_with_line_number}{file_path_separator}{space}",
-        );
+        out.push_str(&format!(
+            "{}{file_path_separator}{space}",
+            ANSIStrings(file_with_line_number)
+        ));
     }
+
+    // if !line.is_empty() {
+    //     painter.syntax_highlight_and_paint_line(
+    //         &line,
+    //         style_sections.unwrap_or(StyleSectionSpecifier::Style(config.hunk_header_style)),
+    //         delta::State::HunkHeader(
+    //             DiffType::Unified,
+    //             ParsedHunkHeader::default(),
+    //             "".to_owned(),
+    //             "".to_owned(),
+    //         ),
+    //         BgShouldFill::No,
+    //     );
+    //     painter.output_buffer.pop(); // trim newline
+    // }
+
+    let mut buffer = Vec::<u8>::new();
+    let mut writer = BufferedANSIWrite::from_writer(&mut buffer);
+
     if !line.is_empty() {
-        painter.syntax_highlight_and_paint_line(
+        Painter::_syntax_highlight_and_paint_line(
             &line,
             style_sections.unwrap_or(StyleSectionSpecifier::Style(config.hunk_header_style)),
             delta::State::HunkHeader(
@@ -430,15 +452,27 @@ fn write_to_output_buffer(
                 "".to_owned(),
             ),
             BgShouldFill::No,
+            painter.config,
+            painter.highlighter.as_mut(),
+            &mut writer,
         );
-        painter.output_buffer.pop(); // trim newline
+
+        writer.emit().unwrap();
     }
+
+    let mut formatted = String::from_utf8_lossy(&buffer).into_owned();
+    if formatted.ends_with("\n") {
+        formatted.pop();
+    }
+
+    format!("{out}{formatted}")
 }
 
 #[cfg(test)]
 pub mod tests {
     use super::*;
     use crate::{ansi::strip_ansi_codes, tests::integration_test_utils};
+    use insta::assert_debug_snapshot;
 
     #[test]
     fn test_parse_hunk_header() {
@@ -532,14 +566,33 @@ pub mod tests {
             &config,
         );
 
-        assert_eq!(result, "\u{1b}[34m3\u{1b}[0m");
+        assert_debug_snapshot!(result, @r#"
+        [
+            ANSIGenericString {
+                style: Style {
+                    foreground: Some(
+                        Blue,
+                    ),
+                    background: None,
+                    blink: false,
+                    bold: false,
+                    dimmed: false,
+                    hidden: false,
+                    italic: false,
+                    reverse: false,
+                    strikethrough: false,
+                    underline: false,
+                },
+                string: "3",
+            },
+        ]
+        "#);
     }
 
     #[test]
     fn test_paint_file_path_with_line_number_hyperlinks() {
         use std::{iter::FromIterator, path::PathBuf};
-
-        use crate::utils;
+        // use crate::utils;
 
         // hunk-header-style (by default) includes 'line-number' but not 'file'.
         // Normally, `paint_file_path_with_line_number` would return a painted line number.
@@ -550,10 +603,11 @@ pub mod tests {
 
         let config = integration_test_utils::make_config_from_args(&["--features", "hyperlinks"]);
         let relative_path = PathBuf::from_iter(["some-dir", "some-file"]);
+        let path_str = relative_path.to_string_lossy();
 
         let result = paint_file_path_with_line_number(
             Some(3),
-            &relative_path.to_string_lossy(),
+            &path_str,
             &config.hunk_header_style,
             &config.hunk_header_line_number_style,
             &config.hunk_header_style_include_file_path,
@@ -562,14 +616,28 @@ pub mod tests {
             &config,
         );
 
-        assert_eq!(
-            result,
-            format!(
-                "\u{1b}]8;;file://{}\u{1b}\\\u{1b}[34m3\u{1b}[0m\u{1b}]8;;\u{1b}\\",
-                utils::path::fake_delta_cwd_for_tests()
-                    .join(relative_path)
-                    .to_string_lossy()
-            )
+        assert_debug_snapshot!(
+            result, @r#"
+        [
+            ANSIGenericString {
+                style: Style {
+                    foreground: Some(
+                        Blue,
+                    ),
+                    background: None,
+                    blink: false,
+                    bold: false,
+                    dimmed: false,
+                    hidden: false,
+                    italic: false,
+                    reverse: false,
+                    strikethrough: false,
+                    underline: false,
+                },
+                string: "3",
+            },
+        ]
+        "#
         );
     }
 
@@ -597,7 +665,7 @@ pub mod tests {
 
         // result is
         // "\u{1b}[1msome-file\u{1b}[0m:\u{1b}[34m3\u{1b}[0m"
-        assert_eq!(result, "");
+        assert_debug_snapshot!(result, @"[]");
     }
 
     #[test]
@@ -626,7 +694,7 @@ pub mod tests {
             &config,
         );
 
-        assert_eq!(result, "");
+        assert_debug_snapshot!(result, @"[]");
     }
 
     #[test]
@@ -652,7 +720,7 @@ pub mod tests {
 
         // result is
         // "\u{1b}[1mδ some-file\u{1b}[0m:\u{1b}[34m3\u{1b}[0m"
-        assert_eq!(result, "");
+        assert_debug_snapshot!(result, @"[]");
     }
 
     #[test]

@@ -80,14 +80,12 @@ impl StateMachine<'_> {
                     is_repeat,
                 );
 
-                write!(
-                    self.painter.writer,
-                    "{}{}{}{}",
+                self.painter.writer.buffer(&[
                     metadata_style.paint(&formatted_blame_metadata),
                     separator_style.paint(nr_prefix),
                     metadata_style.paint(&line_number),
                     separator_style.paint(nr_suffix),
-                )?;
+                ]);
 
                 // Emit syntax-highlighted code
                 if self.state == State::Unknown {
@@ -397,7 +395,7 @@ pub fn parse_blame_line_numbers(arg: &str) -> Result<BlameLineNumbers> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::integration_test_utils;
+    use crate::{paint::BufferedANSIWrite, tests::integration_test_utils};
     use itertools::Itertools;
     use std::{collections::HashMap, io::Cursor};
 
@@ -464,7 +462,8 @@ mod tests {
 
     #[test]
     fn test_color_assignment() {
-        let mut writer = Cursor::new(vec![0; 512]);
+        let mut buffer = Cursor::new(vec![0; 512]);
+        let mut writer = BufferedANSIWrite::from_writer(&mut buffer);
         let config = integration_test_utils::make_config_from_args(&[
             "--blame-format",
             "{author} {commit}",
