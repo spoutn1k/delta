@@ -175,12 +175,12 @@ impl StateMachine<'_> {
         if self.config.hunk_header_style.is_raw {
             write_hunk_header_raw(&mut self.painter, line, raw_line, self.config)?;
         } else if self.config.hunk_header_style.is_omitted {
-            self.painter.writer.writeln()?;
+            self.painter.writer.writeln();
         } else {
             // Add a blank line below the hunk-header-line for readability, unless
             // color_only mode is active.
             if !self.config.color_only {
-                self.painter.writer.writeln()?;
+                self.painter.writer.writeln();
             }
 
             write_line_of_code_with_optional_path_and_line_number(
@@ -273,7 +273,7 @@ fn write_hunk_header_raw(
     let (mut draw_fn, pad, decoration_ansi_term_style) =
         draw::get_draw_function(config.hunk_header_style.decoration_style);
     if config.hunk_header_style.decoration_style != DecorationStyle::NoDecoration {
-        painter.writer.writeln()?;
+        painter.writer.writeln();
     }
     draw_fn(
         painter.writer,

@@ -140,7 +140,10 @@ fn write_boxed_with_underline(
         text_style,
         decoration_style,
     )?;
-    writer.writeln()
+
+    writer.writeln();
+
+    Ok(())
 }
 
 enum UnderOverline {
@@ -230,7 +233,8 @@ fn _write_under_or_over_lined(
     };
     let write_line = |writer: &mut dyn Backend| -> std::io::Result<()> {
         write_horizontal_line(writer, line_width, text_style, decoration_style)?;
-        writer.writeln()
+        writer.writeln();
+        Ok(())
     };
     match underoverline {
         UnderOverline::Under => {}

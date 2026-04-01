@@ -284,7 +284,7 @@ pub fn write_generic_diff_header_header_line(
         draw::get_draw_function(config.file_style.decoration_style);
     if !config.color_only {
         // Maintain 1-1 correspondence between input and output lines.
-        painter.writer.writeln()?;
+        painter.writer.writeln();
     }
     draw_fn(
         painter.writer,

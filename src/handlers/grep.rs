@@ -159,7 +159,7 @@ impl StateMachine<'_> {
         if new_path {
             // Emit new path header line
             if !first_path {
-                self.painter.writer.writeln()?;
+                self.painter.writer.writeln();
             }
             handlers::hunk_header::write_line_of_code_with_optional_path_and_line_number(
                 "",

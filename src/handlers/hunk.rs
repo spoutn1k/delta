@@ -126,7 +126,7 @@ impl StateMachine<'_> {
                 self.painter
                     .writer
                     .push_str(&tabs::expand(&self.raw_line, &self.config.tab_cfg));
-                self.painter.writer.push_char('\n');
+                self.painter.writer.writeln();
                 State::HunkZero(Unified, None)
             }
         };

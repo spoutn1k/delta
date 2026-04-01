@@ -34,10 +34,7 @@ pub trait Backend {
     fn buffer(&mut self, line: &[ANSIString]);
 
     fn push_str(&mut self, data: &str);
-    fn push_char(&mut self, data: char);
-    fn writeln(&mut self) -> io::Result<()>;
-
-    fn clear(&mut self);
+    fn writeln(&mut self);
 }
 
 pub struct BufferedANSIWrite<'p> {
@@ -70,17 +67,8 @@ impl<'p> Backend for BufferedANSIWrite<'p> {
         self.buffer.push_str(data)
     }
 
-    fn push_char(&mut self, data: char) {
-        self.buffer.push(data)
-    }
-
-    fn writeln(&mut self) -> io::Result<()> {
+    fn writeln(&mut self) {
         self.buffer.push('\n');
-        Ok(())
-    }
-
-    fn clear(&mut self) {
-        self.buffer.clear()
     }
 }
 
@@ -338,7 +326,7 @@ impl<'p> Painter<'p> {
             };
 
             output_buffer.push_str(&line);
-            output_buffer.push_char('\n');
+            output_buffer.writeln();
         }
     }
 

@@ -201,7 +201,7 @@ pub fn paint_minus_and_plus_lines_side_by_side(
             bg_should_fill[Right],
             config,
         ));
-        output_buffer.push_char('\n');
+        output_buffer.writeln();
 
         // HACK: The left line number is not getting incremented in `linenumbers_and_styles()`
         // when the alignment matches a minus with a plus line, so fix that here and take
@@ -274,7 +274,7 @@ pub fn paint_zero_lines_side_by_side<'a>(
             );
             output_buffer.push_str(&panel_line);
         }
-        output_buffer.push_char('\n');
+        output_buffer.writeln();
     }
 }
 
