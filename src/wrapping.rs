@@ -652,6 +652,7 @@ pub fn wrap_zero_block<'c: 'a, 'a>(
 
 #[cfg(test)]
 mod tests {
+    use insta::assert_snapshot;
     use lazy_static::lazy_static;
     use syntect::highlighting::Style as SyntectStyle;
 
@@ -1016,7 +1017,7 @@ index 223ca50..e69de29 100644
 
     #[test]
     fn test_wrap_with_unequal_hunk_zero_width() {
-        DeltaTest::with_args(&default_wrap_cfg_plus(&[
+        let t = DeltaTest::with_args(&default_wrap_cfg_plus(&[
             "--side-by-side",
             "--line-numbers-left-format",
             "│L│",
@@ -1028,21 +1029,28 @@ index 223ca50..e69de29 100644
             "spaces",
         ]))
         .set_config(|cfg| cfg.truncation_symbol = ">".into())
-        .with_input(HUNK_ZERO_DIFF)
-        .expect_after_header(
-            r#"
-            │L│abcdefghijklm+   │RRRR│abcdefghijklm+
-            │L│nopqrstuvwxzy+   │RRRR│nopqrstuvwxzy+
-            │L│ 0123456789 0+   │RRRR│ 0123456789 0+
-            │L│123456789 012+   │RRRR│123456789 012+
-            │L│3456789 01234567>│RRRR│3456789 01234>
-            │L│a = 1            │RRRR│a = 2         "#,
-        );
+        .with_input(HUNK_ZERO_DIFF);
+
+        assert_snapshot!(t.output, @r#"
+
+        a.py
+        ────────────────────────────────────────
+
+        ────┐
+        15: │
+        ────┘
+        │L│abcdefghijklm+   │RRRR│abcdefghijklm+
+        │L│nopqrstuvwxzy+   │RRRR│nopqrstuvwxzy+
+        │L│ 0123456789 0+   │RRRR│ 0123456789 0+
+        │L│123456789 012+   │RRRR│123456789 012+
+        │L│3456789 01234567>│RRRR│3456789 01234>
+        │L│a = 1            │RRRR│a = 2
+        "#)
     }
 
     #[test]
     fn test_wrap_with_large_hunk_zero_line_numbers() {
-        DeltaTest::with_args(&default_wrap_cfg_plus(&[
+        let t = DeltaTest::with_args(&default_wrap_cfg_plus(&[
             "--side-by-side",
             "--line-numbers-left-format",
             "│LLL│",
@@ -1054,21 +1062,27 @@ index 223ca50..e69de29 100644
             "ansi",
         ]))
         .set_config(|cfg| cfg.truncation_symbol = ">".into())
-        .with_input(HUNK_ZERO_LARGE_LINENUMBERS_DIFF)
-        .expect_after_header(
-            r#"
-            │LLL│abcde+                   │WW   10   +- 101999 WW│abcde+
-            │LLL│fghij+                   │WW        +-        WW│fghij+
-            │LLL│klmno+                   │WW        +-        WW│klmno+
-            │LLL│pqrst+                   │WW        +-        WW│pqrst+
-            │LLL│uvwxzy 0123456789 012345>│WW        +-        WW│uvwxz>
-            │LLL│a = 1                    │WW        +- 102000 WW│a = 2"#,
-        );
+        .with_input(HUNK_ZERO_LARGE_LINENUMBERS_DIFF);
+
+        assert_snapshot!(t.output, @r"
+
+        a.py
+        ────────────────────────────────────────────────────────────
+
+        ────────┐
+        101999: │
+        ────────┘
+        │LLL│abcde+                   │WW   10   +- 101999 WW│abcde+
+        │LLL│fghij+                   │WW        +-        WW│fghij+
+        │LLL│klmno+                   │WW        +-        WW│klmno+
+        │LLL│pqrst+                   │WW        +-        WW│pqrst+
+        │LLL│uvwxzy 0123456789 012345>│WW        +-        WW│uvwxz>
+        │LLL│a = 1                    │WW        +- 102000 WW│a = 2
+        ")
     }
 
     #[test]
     fn test_wrap_with_keep_markers() {
-        use crate::features::side_by_side::ansifill::ODD_PAD_CHAR;
         let t = DeltaTest::with_args(&default_wrap_cfg_plus(&[
             "--side-by-side",
             "--keep-plus-minus-markers",
@@ -1076,27 +1090,27 @@ index 223ca50..e69de29 100644
             "45",
         ]))
         .set_config(|cfg| cfg.truncation_symbol = ">".into())
-        .with_input(HUNK_MP_DIFF)
-        .expect_after_header(
-            r#"
-            │  4 │ abcdefghijklmn+ │ 15 │ abcdefghijklmn+
-            │    │ opqrstuvwxzy 0+ │    │ opqrstuvwxzy 0+
-            │    │ 123456789 0123+ │    │ 123456789 0123+
-            │    │ 456789 0123456+ │    │ 456789 0123456+
-            │    │ 789 0123456789> │    │ 789 0123456789>
-            │  5 │-a = 0123456789+ │ 16 │+b = 0123456789+
-            │    │  0123456789 01+ │    │  0123456789 01+
-            │    │ 23456789 01234+ │    │ 23456789 01234+
-            │    │ 56789 01234567+ │    │ 56789 01234567+
-            │    │ 89              │    │ 89"#,
-            // this column here is^ where ODD_PAD_CHAR is inserted due to the odd 45 width
-        );
+        .with_input(HUNK_MP_DIFF);
 
-        assert!(!t.output.is_empty());
+        assert_snapshot!(t.output, @r"
 
-        for line in t.output.lines().skip(crate::config::HEADER_LEN) {
-            assert_eq!(line.chars().nth(22), Some(ODD_PAD_CHAR));
-        }
+        a.py
+        ─────────────────────────────────────────────
+
+        ────┐
+        15: │
+        ────┘
+        │  4 │ abcdefghijklmn+ │ 15 │ abcdefghijklmn+
+        │    │ opqrstuvwxzy 0+ │    │ opqrstuvwxzy 0+
+        │    │ 123456789 0123+ │    │ 123456789 0123+
+        │    │ 456789 0123456+ │    │ 456789 0123456+
+        │    │ 789 0123456789> │    │ 789 0123456789>
+        │  5 │-a = 0123456789+ │ 16 │+b = 0123456789+
+        │    │  0123456789 01+ │    │  0123456789 01+
+        │    │ 23456789 01234+ │    │ 23456789 01234+
+        │    │ 56789 01234567+ │    │ 56789 01234567+
+        │    │ 89              │    │ 89
+        ")
     }
 
     #[test]
@@ -1105,30 +1119,41 @@ index 223ca50..e69de29 100644
             make_config_from_args(&default_wrap_cfg_plus(&["--side-by-side", "--width", "55"]));
 
         {
-            DeltaTest::with_config(&config)
-                .with_input(&format!(
-                    "{HUNK_ALIGN_DIFF_HEADER}-{HUNK_ALIGN_DIFF_SHORT}+{HUNK_ALIGN_DIFF_LONG}",
-                ))
-                .expect_after_header(
-                    r#"
-                    │  1 │.........1.........2< │  1 │.........1.........2+
-                    │    │                >.... │    │.........3.........4+
-                    │    │                      │    │.........5.........6"#,
-                );
-            // the place where ODD_PAD_CHAR^ is inserted due to the odd 55 width
+            let t = DeltaTest::with_config(&config).with_input(&format!(
+                "{HUNK_ALIGN_DIFF_HEADER}-{HUNK_ALIGN_DIFF_SHORT}+{HUNK_ALIGN_DIFF_LONG}",
+            ));
+
+            assert_snapshot!(t.output, @r#"
+
+            a ⟶   b
+            ───────────────────────────────────────────────────────
+
+            ───┐
+            1: │
+            ───┘
+            │  1 │.........1.........2< │  1 │.........1.........2+
+            │    │                >.... │    │.........3.........4+
+            │    │                      │    │.........5.........6
+            "#);
         }
 
         {
-            DeltaTest::with_config(&config)
-                .with_input(&format!(
-                    "{HUNK_ALIGN_DIFF_HEADER}-{HUNK_ALIGN_DIFF_LONG}+{HUNK_ALIGN_DIFF_SHORT}",
-                ))
-                .expect_after_header(
-                    r#"
-                    │  1 │.........1.........2+ │  1 │.........1.........2<
-                    │    │.........3.........4+ │    │                >....
-                    │    │.........5.........6  │    │"#,
-                );
+            let t = DeltaTest::with_config(&config).with_input(&format!(
+                "{HUNK_ALIGN_DIFF_HEADER}-{HUNK_ALIGN_DIFF_LONG}+{HUNK_ALIGN_DIFF_SHORT}",
+            ));
+
+            assert_snapshot!(t.output, @r#"
+
+            a ⟶   b
+            ───────────────────────────────────────────────────────
+
+            ───┐
+            1: │
+            ───┘
+            │  1 │.........1.........2+ │  1 │.........1.........2<
+            │    │.........3.........4+ │    │                >....
+            │    │.........5.........6  │    │
+            "#)
         }
     }
 
@@ -1143,29 +1168,41 @@ index 223ca50..e69de29 100644
         ]));
 
         {
-            DeltaTest::with_config(&config)
-                .with_input(&format!(
-                    "{HUNK_ALIGN_DIFF_HEADER}-{HUNK_ALIGN_DIFF_SHORT}+{HUNK_ALIGN_DIFF_LONG}",
-                ))
-                .expect_after_header(
-                    r#"
-                    │  1 │.........1.........2....│  1 │.........1.........2...+
-                    │    │                        │    │......3.........4......+
-                    │    │                        │    │...5.........6          "#,
-                );
+            let t = DeltaTest::with_config(&config).with_input(&format!(
+                "{HUNK_ALIGN_DIFF_HEADER}-{HUNK_ALIGN_DIFF_SHORT}+{HUNK_ALIGN_DIFF_LONG}",
+            ));
+
+            assert_snapshot!(t.output, @r#"
+
+            a ⟶   b
+            ─────────────────────────────────────────────────────────────
+
+            ───┐
+            1: │
+            ───┘
+            │  1 │.........1.........2....│  1 │.........1.........2...+
+            │    │                        │    │......3.........4......+
+            │    │                        │    │...5.........6
+            "#)
         }
 
         {
-            DeltaTest::with_config(&config)
-                .with_input(&format!(
-                    "{HUNK_ALIGN_DIFF_HEADER}-{HUNK_ALIGN_DIFF_LONG}+{HUNK_ALIGN_DIFF_SHORT}",
-                ))
-                .expect_after_header(
-                    r#"
-                    │  1 │.........1.........2...+│  1 │.........1.........2....
-                    │    │......3.........4......+│    │
-                    │    │...5.........6          │    │"#,
-                );
+            let t = DeltaTest::with_config(&config).with_input(&format!(
+                "{HUNK_ALIGN_DIFF_HEADER}-{HUNK_ALIGN_DIFF_LONG}+{HUNK_ALIGN_DIFF_SHORT}",
+            ));
+
+            assert_snapshot!(t.output, @r#"
+
+            a ⟶   b
+            ─────────────────────────────────────────────────────────────
+
+            ───┐
+            1: │
+            ───┘
+            │  1 │.........1.........2...+│  1 │.........1.........2....
+            │    │......3.........4......+│    │
+            │    │...5.........6          │    │
+            "#)
         }
     }
 
@@ -1184,29 +1221,41 @@ index 223ca50..e69de29 100644
         config.truncation_symbol = ">".into();
 
         {
-            DeltaTest::with_config(&config)
-                .with_input(&format!(
-                    "{HUNK_ALIGN_DIFF_HEADER}-{HUNK_ALIGN_DIFF_SHORT}+{HUNK_ALIGN_DIFF_LONG}",
-                ))
-                .expect_after_header(
-                    r#"
-                    │  1 │.........1.........2....      │  1 │.........1.........2.........+
-                    │    │                              │    │3.........4.........5........+
-                    │    │                              │    │.6                            "#,
-                );
+            let t = DeltaTest::with_config(&config).with_input(&format!(
+                "{HUNK_ALIGN_DIFF_HEADER}-{HUNK_ALIGN_DIFF_SHORT}+{HUNK_ALIGN_DIFF_LONG}",
+            ));
+
+            assert_snapshot!(t.output, @r#"
+
+            a ⟶   b
+            ────────────────────────────────────────────────────────────────────────
+
+            ───┐
+            1: │
+            ───┘
+            │  1 │.........1.........2....      │  1 │.........1.........2.........+
+            │    │                              │    │3.........4.........5........+
+            │    │                              │    │.6
+            "#)
         }
 
         {
             config.wrap_config.max_lines = 2;
-            DeltaTest::with_config(&config)
-                .with_input(&format!(
-                    "{HUNK_ALIGN_DIFF_HEADER}-{HUNK_ALIGN_DIFF_SHORT}+{HUNK_ALIGN_DIFF_LONG}",
-                ))
-                .expect_after_header(
-                    r#"
-                    │  1 │.........1.........2....      │  1 │.........1.........2.........+
-                    │    │                              │    │3.........4.........5........>"#,
-                );
+            let t = DeltaTest::with_config(&config).with_input(&format!(
+                "{HUNK_ALIGN_DIFF_HEADER}-{HUNK_ALIGN_DIFF_SHORT}+{HUNK_ALIGN_DIFF_LONG}",
+            ));
+
+            assert_snapshot!(t.output, @r#"
+
+            a ⟶   b
+            ────────────────────────────────────────────────────────────────────────
+
+            ───┐
+            1: │
+            ───┘
+            │  1 │.........1.........2....      │  1 │.........1.........2.........+
+            │    │                              │    │3.........4.........5........>
+            "#)
         }
     }
 }
