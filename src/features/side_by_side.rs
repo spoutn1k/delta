@@ -6,7 +6,7 @@ use crate::{
     errors::{Error, Result},
     features::{OptionValueFunction, line_numbers},
     minusplus::*,
-    paint::{Backend, BgFillMethod, BgShouldFill, LineSections, Painter},
+    paint::{ANSIOwnedString, Backend, BgFillMethod, BgShouldFill, LineSections, Painter},
     style::Style,
     wrapping::{wrap_minusplus_block, wrap_zero_block},
 };
@@ -176,7 +176,7 @@ pub fn paint_minus_and_plus_lines_side_by_side(
             Some(i) => &line_states[Left][i],
             None => &State::HunkMinus(DiffType::Unified, None),
         };
-        output_buffer.push_str(&paint_left_panel_minus_line(
+        output_buffer.buffer_precooked(&mut paint_left_panel_minus_line(
             minus_line_index,
             &syntax_sections[Left],
             &diff_sections[Left],
@@ -191,7 +191,7 @@ pub fn paint_minus_and_plus_lines_side_by_side(
             Some(i) => &line_states[Right][i],
             None => &State::HunkPlus(DiffType::Unified, None),
         };
-        output_buffer.push_str(&paint_right_panel_plus_line(
+        output_buffer.buffer_precooked(&mut paint_right_panel_plus_line(
             plus_line_index,
             &syntax_sections[Right],
             &diff_sections[Right],
@@ -261,6 +261,7 @@ pub fn paint_zero_lines_side_by_side<'a>(
                 painted_prefix.clone(),
                 config,
             );
+
             pad_panel_line_to_width(
                 &mut panel_line,
                 panel_line_is_empty,
@@ -272,7 +273,8 @@ pub fn paint_zero_lines_side_by_side<'a>(
                 background_color_extends_to_terminal_width,
                 config,
             );
-            output_buffer.push_str(&panel_line);
+
+            output_buffer.buffer_precooked(&mut panel_line);
         }
         output_buffer.writeln();
     }
@@ -288,7 +290,7 @@ fn paint_left_panel_minus_line<'a>(
     line_numbers_data: &mut Option<&mut line_numbers::LineNumbersData>,
     background_color_extends_to_terminal_width: BgShouldFill,
     config: &Config,
-) -> String {
+) -> Vec<ANSIOwnedString> {
     let (mut panel_line, panel_line_is_empty) = paint_minus_or_plus_panel_line(
         line_index,
         syntax_style_sections,
@@ -298,6 +300,7 @@ fn paint_left_panel_minus_line<'a>(
         Left,
         config,
     );
+
     pad_panel_line_to_width(
         &mut panel_line,
         panel_line_is_empty,
@@ -323,7 +326,7 @@ fn paint_right_panel_plus_line<'a>(
     line_numbers_data: &mut Option<&mut line_numbers::LineNumbersData>,
     background_color_extends_to_terminal_width: BgShouldFill,
     config: &Config,
-) -> String {
+) -> Vec<ANSIOwnedString> {
     let (mut panel_line, panel_line_is_empty) = paint_minus_or_plus_panel_line(
         line_index,
         syntax_style_sections,
@@ -418,7 +421,7 @@ fn paint_minus_or_plus_panel_line<'a>(
     line_numbers_data: &mut Option<&mut line_numbers::LineNumbersData>,
     panel_side: PanelSide,
     config: &Config,
-) -> (String, bool) {
+) -> (Vec<ANSIOwnedString>, bool) {
     let (empty_line_syntax_sections, empty_line_diff_sections) = (Vec::new(), Vec::new());
 
     let (line_syntax_sections, line_diff_sections, state_for_line_numbers_field) =
@@ -471,7 +474,7 @@ fn paint_minus_or_plus_panel_line<'a>(
 /// instructing the terminal emulator to fill the background color rightwards.
 #[allow(clippy::too_many_arguments, clippy::comparison_chain)]
 fn pad_panel_line_to_width(
-    panel_line: &mut String,
+    panel_line: &mut Vec<ANSIOwnedString>,
     panel_line_is_empty: bool,
     line_index: Option<usize>,
     diff_style_sections: &[LineSections<'_, Style>],
@@ -501,7 +504,7 @@ fn pad_panel_line_to_width(
         };
     };
 
-    let text_width = ansi::measure_text_width(panel_line);
+    let text_width = ansi::measure_buffer_width(panel_line);
     let panel_width = config
         .side_by_side_data
         .as_ref()
@@ -509,8 +512,7 @@ fn pad_panel_line_to_width(
         .unwrap_or(0);
 
     if text_width > panel_width {
-        *panel_line =
-            ansi::truncate_str(panel_line, panel_width, &config.truncation_symbol).to_string();
+        ansi::truncate_buffer(panel_line, panel_width, &config.truncation_symbol);
     }
 
     let (bg_fill_mode, fill_style) = get_right_fill_style_for_panel(
@@ -526,14 +528,13 @@ fn pad_panel_line_to_width(
 
     match bg_fill_mode {
         Some(BgFillMethod::TryAnsiSequence) => {
-            Painter::right_fill_background_color(panel_line, fill_style)
+            // Painter::right_fill_background_color(panel_line, fill_style)
         }
         Some(BgFillMethod::Spaces) if text_width >= panel_width => (),
-        Some(BgFillMethod::Spaces) => panel_line.push_str(
-            #[allow(clippy::unnecessary_to_owned)]
-            &fill_style
+        Some(BgFillMethod::Spaces) => panel_line.push(
+            fill_style
                 .paint(" ".repeat(panel_width - text_width))
-                .to_string(),
+                .into(),
         ),
         None => (),
     }

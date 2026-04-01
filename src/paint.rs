@@ -52,10 +52,18 @@ impl From<ANSIString<'_>> for ANSIOwnedString {
     }
 }
 
+impl<'a> From<ANSIOwnedString> for ANSIString<'a> {
+    fn from(ANSIOwnedString { style, contents }: ANSIOwnedString) -> Self {
+        style.paint(contents)
+    }
+}
+
 pub trait Backend {
     fn emit(&mut self) -> io::Result<()>;
 
     fn buffer(&mut self, line: &[ANSIString]);
+
+    fn buffer_precooked(&mut self, line: &mut [ANSIOwnedString]);
 
     fn push_str(&mut self, data: &str);
     fn writeln(&mut self);
@@ -71,6 +79,10 @@ impl Backend for StorageBackend {
 
     fn buffer(&mut self, line: &[ANSIString]) {
         self.0.extend(line.iter().map(ANSIOwnedString::from));
+    }
+
+    fn buffer_precooked(&mut self, line: &mut [ANSIOwnedString]) {
+        self.0.extend(line.iter_mut().map(std::mem::take))
     }
 
     fn push_str(&mut self, data: &str) {
@@ -106,6 +118,18 @@ impl<'p> Backend for BufferedANSIWrite<'p> {
 
     fn buffer(&mut self, line: &[ANSIString]) {
         self.buffer.push_str(&ANSIStrings(line).to_string());
+    }
+
+    fn buffer_precooked(&mut self, line: &mut [ANSIOwnedString]) {
+        self.buffer.push_str(
+            &ANSIStrings(
+                &line
+                    .iter_mut()
+                    .map(|s| ANSIString::from(std::mem::take(s)))
+                    .collect::<Vec<_>>(),
+            )
+            .to_string(),
+        );
     }
 
     fn push_str(&mut self, data: &str) {
@@ -343,6 +367,7 @@ impl<'p> Painter<'p> {
                 painted_prefix(state.clone(), config),
                 config,
             );
+
             let (bg_fill_mode, fill_style) =
                 Painter::get_should_right_fill_background_color_and_fill_style(
                     diff_sections,
@@ -353,14 +378,13 @@ impl<'p> Painter<'p> {
                 );
 
             if let Some(BgFillMethod::TryAnsiSequence) = bg_fill_mode {
-                Painter::right_fill_background_color(&mut line, fill_style);
+                //Painter::right_fill_background_color(&mut line, fill_style);
             } else if let Some(BgFillMethod::Spaces) = bg_fill_mode {
-                let text_width = ansi::measure_text_width(&line);
-                line.push_str(
-                    #[allow(clippy::unnecessary_to_owned)]
-                    &fill_style
+                let text_width = ansi::measure_buffer_width(&line);
+                line.push(
+                    fill_style
                         .paint(" ".repeat(config.available_terminal_width - text_width))
-                        .to_string(),
+                        .into(),
                 );
             } else if line_is_empty && let Some(empty_line_style) = empty_line_style {
                 Painter::mark_empty_line(
@@ -370,7 +394,7 @@ impl<'p> Painter<'p> {
                 );
             };
 
-            output_buffer.push_str(&line);
+            output_buffer.buffer_precooked(&mut line);
             output_buffer.writeln();
         }
     }
@@ -509,12 +533,15 @@ impl<'p> Painter<'p> {
     /// to the line. This is typically appropriate only when the `line` buffer is empty, since
     /// otherwise the ANSI_CSI_CLEAR_TO_BOL instruction would overwrite the text to the left of the
     /// current buffer position.
-    pub fn mark_empty_line(empty_line_style: &Style, line: &mut String, marker: Option<&str>) {
-        line.push_str(
-            #[allow(clippy::unnecessary_to_owned)]
-            &empty_line_style
+    pub fn mark_empty_line(
+        empty_line_style: &Style,
+        line: &mut Vec<ANSIOwnedString>,
+        marker: Option<&str>,
+    ) {
+        line.push(
+            empty_line_style
                 .paint(marker.unwrap_or(ansi::ANSI_CSI_CLEAR_TO_BOL))
-                .to_string(),
+                .into(),
         );
     }
 
@@ -527,7 +554,7 @@ impl<'p> Painter<'p> {
         side_by_side_panel: Option<PanelSide>,
         mut painted_prefix: Option<ansi_term::ANSIString>,
         config: &config::Config,
-    ) -> (String, bool) {
+    ) -> (Vec<ANSIOwnedString>, bool) {
         let mut ansi_strings = Vec::new();
 
         let output_line_numbers = line_numbers_data.is_some();
@@ -575,7 +602,10 @@ impl<'p> Painter<'p> {
         // Only if syntax is empty (implies diff empty) can a line actually be empty.
         let is_empty = syntax_sections.is_empty();
 
-        (ansi_term::ANSIStrings(&ansi_strings).to_string(), is_empty)
+        (
+            ansi_strings.iter().map(ANSIOwnedString::from).collect(),
+            is_empty,
+        )
     }
 
     /// Write output buffer to output stream, and clear the buffer.

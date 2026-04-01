@@ -10,6 +10,8 @@ use unicode_width::UnicodeWidthStr;
 
 use iterator::{AnsiElementIterator, Element};
 
+use crate::paint::ANSIOwnedString;
+
 pub const ANSI_CSI_CLEAR_TO_EOL: &str = "\x1b[0K";
 pub const ANSI_CSI_CLEAR_TO_BOL: &str = "\x1b[1K";
 pub const ANSI_SGR_BOLD: &str = "\x1b[1m";
@@ -24,6 +26,15 @@ pub fn strip_ansi_codes(s: &str) -> String {
 pub fn measure_text_width(s: &str) -> usize {
     ansi_strings_iterator(s).fold(0, |acc, (element, is_ansi)| {
         acc + if is_ansi { 0 } else { element.width() }
+    })
+}
+
+pub fn measure_buffer_width(b: &[ANSIOwnedString]) -> usize {
+    b.iter().fold(0, |acc, s| {
+        acc + ansi_strings_iterator(&s.style.paint(&s.contents))
+            .fold(0, |acc, (element, is_ansi)| {
+                acc + if is_ansi { 0 } else { element.width() }
+            })
     })
 }
 
@@ -102,6 +113,63 @@ pub fn truncate_str<'a>(s: &'a str, display_width: usize, tail: &str) -> Cow<'a,
 /// prefix of the input `s`.
 pub fn truncate_str_short(s: &str, display_width: usize) -> Cow<'_, str> {
     truncate_str_impl(s, display_width, "", None)
+}
+
+fn truncate_buffer_impl(
+    s: &mut [ANSIOwnedString],
+    display_width: usize,
+    tail: &str,
+    fill2w: Option<char>,
+) {
+    // let items = ansi_strings_iterator(s).collect::<Vec<(&str, bool)>>();
+    let width = measure_buffer_width(s);
+    if width <= display_width {
+        return;
+    }
+
+    let result_tail = if !tail.is_empty() {
+        truncate_str_impl(tail, display_width, "", fill2w).to_string()
+    } else {
+        String::new()
+    };
+
+    let mut used = measure_text_width(&result_tail);
+    for item in s {
+        let size = ansi_strings_iterator(&item.style.paint(&item.contents))
+            .fold(0, |acc, (element, is_ansi)| {
+                acc + if is_ansi { 0 } else { element.width() }
+            });
+
+        if used + size + result_tail.len() > display_width {
+            used = display_width;
+            item.contents = String::new();
+        }
+    }
+}
+
+/// Truncate string such that `tail` is present as a suffix, preceded by as much of `s` as can be
+/// displayed in the requested width. Even with `tail` empty the result may not be a prefix of `s`.
+// Return string constructed as follows:
+// 1. `display_width` characters are available. If the string fits, return it.
+//
+// 2. If a double-width (fullwidth) grapheme has to be cut in the following steps, replace the first
+//    half with a space (' '). If this happens the result is no longer a prefix of the input.
+//
+// 3. Contribute graphemes and ANSI escape sequences from `tail` until either (1) `tail` is
+//    exhausted, or (2) the display width of the result would exceed `display_width`.
+//
+// 4. If tail was exhausted, then contribute graphemes and ANSI escape sequences from `s` until the
+//    display_width of the result would exceed `display_width`.
+pub fn truncate_buffer(s: &mut [ANSIOwnedString], display_width: usize, tail: &str) {
+    truncate_buffer_impl(s, display_width, tail, Some(' '))
+}
+
+/// Truncate string `s` so it fits into `display_width`, ignoring any ANSI escape sequences when
+/// calculating the width. If a double-width ("fullwidth") grapheme has to be cut, it is omitted and
+/// the resulting string is *shorter* than `display_width`. But this way the result is always a
+/// prefix of the input `s`.
+pub fn truncate_buffer_short(s: &mut [ANSIOwnedString], display_width: usize) {
+    truncate_buffer_impl(s, display_width, "", None)
 }
 
 pub fn parse_style_sections(s: &str) -> Vec<(ansi_term::Style, &str)> {
@@ -244,20 +312,32 @@ mod tests {
 
     #[test]
     fn test_strip_ansi_codes_osc_hyperlink() {
-        assert_eq!(strip_ansi_codes("\x1b[38;5;4m\x1b]8;;file:///Users/dan/src/delta/src/ansi/mod.rs\x1b\\src/ansi/mod.rs\x1b]8;;\x1b\\\x1b[0m\n"),
-                   "src/ansi/mod.rs\n");
+        assert_eq!(
+            strip_ansi_codes(
+                "\x1b[38;5;4m\x1b]8;;file:///Users/dan/src/delta/src/ansi/mod.rs\x1b\\src/ansi/mod.rs\x1b]8;;\x1b\\\x1b[0m\n"
+            ),
+            "src/ansi/mod.rs\n"
+        );
     }
 
     #[test]
     fn test_measure_text_width_osc_hyperlink() {
-        assert_eq!(measure_text_width("\x1b[38;5;4m\x1b]8;;file:///Users/dan/src/delta/src/ansi/mod.rs\x1b\\src/ansi/mod.rs\x1b]8;;\x1b\\\x1b[0m"),
-                   measure_text_width("src/ansi/mod.rs"));
+        assert_eq!(
+            measure_text_width(
+                "\x1b[38;5;4m\x1b]8;;file:///Users/dan/src/delta/src/ansi/mod.rs\x1b\\src/ansi/mod.rs\x1b]8;;\x1b\\\x1b[0m"
+            ),
+            measure_text_width("src/ansi/mod.rs")
+        );
     }
 
     #[test]
     fn test_measure_text_width_osc_hyperlink_non_ascii() {
-        assert_eq!(measure_text_width("\x1b[38;5;4m\x1b]8;;file:///Users/dan/src/delta/src/ansi/mod.rs\x1b\\src/ansi/modバー.rs\x1b]8;;\x1b\\\x1b[0m"),
-                   measure_text_width("src/ansi/modバー.rs"));
+        assert_eq!(
+            measure_text_width(
+                "\x1b[38;5;4m\x1b]8;;file:///Users/dan/src/delta/src/ansi/mod.rs\x1b\\src/ansi/modバー.rs\x1b]8;;\x1b\\\x1b[0m"
+            ),
+            measure_text_width("src/ansi/modバー.rs")
+        );
     }
 
     #[test]
