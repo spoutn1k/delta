@@ -28,6 +28,30 @@ use syntect::{
     parsing::{SyntaxReference, SyntaxSet},
 };
 
+#[derive(Debug, Default, Clone)]
+pub struct ANSIOwnedString {
+    pub style: ansi_term::Style,
+    pub contents: String,
+}
+
+impl From<&ANSIString<'_>> for ANSIOwnedString {
+    fn from(value: &ANSIString) -> Self {
+        Self {
+            style: value.style_ref().to_owned(),
+            contents: (**value).to_owned(),
+        }
+    }
+}
+
+impl From<ANSIString<'_>> for ANSIOwnedString {
+    fn from(value: ANSIString) -> Self {
+        Self {
+            style: value.style_ref().to_owned(),
+            contents: (*value).to_owned(),
+        }
+    }
+}
+
 pub trait Backend {
     fn emit(&mut self) -> io::Result<()>;
 
@@ -35,6 +59,27 @@ pub trait Backend {
 
     fn push_str(&mut self, data: &str);
     fn writeln(&mut self);
+}
+
+#[derive(Debug, Default)]
+pub struct StorageBackend(pub Vec<ANSIOwnedString>);
+
+impl Backend for StorageBackend {
+    fn emit(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn buffer(&mut self, line: &[ANSIString]) {
+        self.0.extend(line.iter().map(ANSIOwnedString::from));
+    }
+
+    fn push_str(&mut self, data: &str) {
+        self.0.push(Style::new().paint(data).into());
+    }
+
+    fn writeln(&mut self) {
+        self.0.push(Style::new().paint("\n").into())
+    }
 }
 
 pub struct BufferedANSIWrite<'p> {
