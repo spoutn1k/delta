@@ -2,17 +2,17 @@ use itertools::Itertools;
 use syntect::highlighting::Style as SyntectStyle;
 use unicode_width::UnicodeWidthStr;
 
-use crate::ansi;
-use crate::cli;
-use crate::config::{self, delta_unreachable, Config};
-use crate::delta::DiffType;
-use crate::delta::State;
-use crate::edits;
-use crate::features::{line_numbers, OptionValueFunction};
-use crate::minusplus::*;
-use crate::paint::{BgFillMethod, BgShouldFill, LineSections, Painter};
-use crate::style::Style;
-use crate::wrapping::{wrap_minusplus_block, wrap_zero_block};
+use crate::{
+    ansi, cli,
+    config::{self, Config, delta_unreachable},
+    delta::{DiffType, State},
+    edits,
+    features::{OptionValueFunction, line_numbers},
+    minusplus::*,
+    paint::{BgFillMethod, BgShouldFill, LineSections, Painter},
+    style::Style,
+    wrapping::{wrap_minusplus_block, wrap_zero_block},
+};
 
 pub fn make_feature() -> Vec<(String, OptionValueFunction)> {
     builtin_feature!([
@@ -31,8 +31,7 @@ pub fn make_feature() -> Vec<(String, OptionValueFunction)> {
 // Aliases for Minus/Plus because Left/Right and PanelSide makes
 // more sense in a side-by-side context.
 pub use crate::minusplus::MinusPlusIndex as PanelSide;
-pub use MinusPlusIndex::Minus as Left;
-pub use MinusPlusIndex::Plus as Right;
+pub use MinusPlusIndex::{Minus as Left, Plus as Right};
 
 use super::line_numbers::LineNumbersData;
 
@@ -65,8 +64,11 @@ pub fn available_line_width(
     // The width can be reduced by the line numbers and/or
     // a possibly added/restored 1-wide "+/-/ " prefix.
     let line_width = |side: PanelSide| {
-        config.side_by_side_data[side]
-            .width
+        config
+            .side_by_side_data
+            .as_ref()
+            .map(|d| d[side].width)
+            .unwrap_or(0)
             .saturating_sub(line_numbers_width[side])
             .saturating_sub(config.keep_plus_minus_markers as usize)
     };
@@ -500,7 +502,11 @@ fn pad_panel_line_to_width(
     };
 
     let text_width = ansi::measure_text_width(panel_line);
-    let panel_width = config.side_by_side_data[panel_side].width;
+    let panel_width = config
+        .side_by_side_data
+        .as_ref()
+        .map(|d| d[panel_side].width)
+        .unwrap_or(0);
 
     if text_width > panel_width {
         *panel_line =
@@ -535,8 +541,7 @@ fn pad_panel_line_to_width(
 
 pub mod ansifill {
     use super::SideBySideData;
-    use crate::config::Config;
-    use crate::paint::BgFillMethod;
+    use crate::{config::Config, paint::BgFillMethod};
 
     pub const ODD_PAD_CHAR: char = ' ';
 
@@ -559,7 +564,7 @@ pub mod ansifill {
     impl UseFullPanelWidth {
         pub fn new(config: &Config) -> Self {
             Self(
-                config.side_by_side
+                config.side_by_side_data.is_some()
                     && Self::is_odd_with_ansi(&config.decorations_width, &config.line_fill_method),
             )
         }
@@ -590,9 +595,11 @@ pub mod ansifill {
 
 #[cfg(test)]
 pub mod tests {
-    use crate::ansi::strip_ansi_codes;
-    use crate::features::line_numbers::tests::*;
-    use crate::tests::integration_test_utils::{make_config_from_args, run_delta, DeltaTest};
+    use crate::{
+        ansi::strip_ansi_codes,
+        features::line_numbers::tests::*,
+        tests::integration_test_utils::{DeltaTest, make_config_from_args, run_delta},
+    };
     use insta::assert_snapshot;
 
     #[test]

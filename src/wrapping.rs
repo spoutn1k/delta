@@ -2,19 +2,20 @@ use syntect::highlighting::Style as SyntectStyle;
 use unicode_segmentation::UnicodeSegmentation;
 use unicode_width::UnicodeWidthStr;
 
-use crate::cli;
-use crate::config::INLINE_SYMBOL_WIDTH_1;
-use crate::fatal;
+use crate::{cli, config::INLINE_SYMBOL_WIDTH_1, fatal};
 
-use crate::config::Config;
-use crate::delta::DiffType;
-use crate::delta::State;
-use crate::features::line_numbers::{self, SideBySideLineWidth};
-use crate::features::side_by_side::{available_line_width, line_is_too_long, Left, Right};
-use crate::minusplus::*;
-use crate::paint::LineSections;
-use crate::style::Style;
-use crate::utils::syntect::FromDeltaStyle;
+use crate::{
+    config::Config,
+    delta::{DiffType, State},
+    features::{
+        line_numbers::{self, SideBySideLineWidth},
+        side_by_side::{Left, Right, available_line_width, line_is_too_long},
+    },
+    minusplus::*,
+    paint::LineSections,
+    style::Style,
+    utils::syntect::FromDeltaStyle,
+};
 
 /// See [`wrap_line`] for documentation.
 #[derive(Clone, Debug)]
@@ -595,10 +596,11 @@ pub fn wrap_zero_block<'c: 'a, 'a>(
         let width = available_line_width(config, line_numbers_data);
         std::cmp::min(width[Left], width[Right])
     } else {
-        std::cmp::min(
-            config.side_by_side_data[Left].width,
-            config.side_by_side_data[Right].width,
-        )
+        config
+            .side_by_side_data
+            .as_ref()
+            .map(|sbs| std::cmp::min(sbs[Left].width, sbs[Right].width))
+            .unwrap_or(0)
     };
 
     // Called with a single line, so no need to use the 1-sized bool vector.
@@ -653,12 +655,13 @@ mod tests {
     use lazy_static::lazy_static;
     use syntect::highlighting::Style as SyntectStyle;
 
-    use super::wrap_line;
-    use super::WrapConfig;
-    use crate::config::Config;
-    use crate::paint::LineSections;
-    use crate::style::Style;
-    use crate::tests::integration_test_utils::{make_config_from_args, DeltaTest};
+    use super::{WrapConfig, wrap_line};
+    use crate::{
+        config::Config,
+        paint::LineSections,
+        style::Style,
+        tests::integration_test_utils::{DeltaTest, make_config_from_args},
+    };
 
     lazy_static! {
         static ref S1: Style = Style {

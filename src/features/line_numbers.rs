@@ -3,17 +3,22 @@ use std::cmp::max;
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::color::ColorMode::*;
-use crate::config;
-use crate::delta::State;
-use crate::features::hyperlinks;
-use crate::features::side_by_side::ansifill::{self, ODD_PAD_CHAR};
-use crate::features::side_by_side::{Left, PanelSide, Right};
-use crate::features::OptionValueFunction;
-use crate::format::{self, Align, Placeholder};
-use crate::minusplus::*;
-use crate::style::Style;
-use crate::utils;
+use crate::{
+    color::ColorMode::*,
+    config,
+    delta::State,
+    features::{
+        OptionValueFunction, hyperlinks,
+        side_by_side::{
+            Left, PanelSide, Right,
+            ansifill::{self, ODD_PAD_CHAR},
+        },
+    },
+    format::{self, Align, Placeholder},
+    minusplus::*,
+    style::Style,
+    utils,
+};
 
 pub fn make_feature() -> Vec<(String, OptionValueFunction)> {
     builtin_feature!([
@@ -114,7 +119,7 @@ pub fn format_and_paint_line_numbers<'a>(
 ) -> Vec<ansi_term::ANSIGenericString<'a, str>> {
     let mut formatted_numbers = Vec::new();
 
-    let (emit_left, emit_right) = match (config.side_by_side, side_by_side_panel) {
+    let (emit_left, emit_right) = match (config.side_by_side_data.is_some(), side_by_side_panel) {
         (false, _) => (true, true),
         (true, Some(Left)) => (true, false),
         (true, Some(Right)) => (false, true),
@@ -323,10 +328,12 @@ fn format_line_number(
 pub mod tests {
     use regex::Captures;
 
-    use crate::ansi::strip_ansi_codes;
-    use crate::features::side_by_side::ansifill::ODD_PAD_CHAR;
-    use crate::format::FormatStringData;
-    use crate::tests::integration_test_utils::{make_config_from_args, run_delta, DeltaTest};
+    use crate::{
+        ansi::strip_ansi_codes,
+        features::side_by_side::ansifill::ODD_PAD_CHAR,
+        format::FormatStringData,
+        tests::integration_test_utils::{DeltaTest, make_config_from_args, run_delta},
+    };
 
     use super::*;
 

@@ -1,25 +1,31 @@
-use std::borrow::Cow;
-use std::collections::HashMap;
-use std::io::Write;
+use std::{borrow::Cow, collections::HashMap, io::Write};
 
 use ansi_term::ANSIString;
 use itertools::Itertools;
-use syntect::easy::HighlightLines;
-use syntect::highlighting::Style as SyntectStyle;
-use syntect::parsing::{SyntaxReference, SyntaxSet};
+use syntect::{
+    easy::HighlightLines,
+    highlighting::Style as SyntectStyle,
+    parsing::{SyntaxReference, SyntaxSet},
+};
 
-use crate::config::{self, delta_unreachable, Config};
-use crate::delta::{DiffType, InMergeConflict, MergeParents, State};
-use crate::features::hyperlinks;
-use crate::features::line_numbers::{self, LineNumbersData};
-use crate::features::side_by_side::ansifill;
-use crate::features::side_by_side::{self, PanelSide};
-use crate::handlers::merge_conflict;
-use crate::minusplus::*;
-use crate::paint::superimpose_style_sections::superimpose_style_sections;
-use crate::style::Style;
-use crate::{ansi, style};
-use crate::{edits, utils, utils::tabs};
+use crate::{
+    ansi,
+    config::{self, Config, delta_unreachable},
+    delta::{DiffType, InMergeConflict, MergeParents, State},
+    edits,
+    features::{
+        hyperlinks,
+        line_numbers::{self, LineNumbersData},
+        side_by_side::{self, PanelSide, ansifill},
+    },
+    handlers::merge_conflict,
+    minusplus::*,
+    paint::superimpose_style_sections::superimpose_style_sections,
+    style,
+    style::Style,
+    utils,
+    utils::tabs,
+};
 
 pub type LineSections<'a, S> = Vec<(S, &'a str)>;
 
@@ -78,7 +84,7 @@ impl<'p> Painter<'p> {
                 &config.line_numbers_format,
                 panel_width_fix,
             ))
-        } else if config.side_by_side {
+        } else if config.side_by_side_data.is_some() {
             // If line numbers are disabled in side-by-side then the data is still used
             // for width calculation and to pad odd width to even, see `UseFullPanelWidth`
             // for details.
@@ -182,7 +188,7 @@ impl<'p> Painter<'p> {
             &[false],
             self.config,
         );
-        if self.config.side_by_side {
+        if self.config.side_by_side_data.is_some() {
             // `lines[0].0` so the line has the '\n' already added (as in the +- case)
             side_by_side::paint_zero_lines_side_by_side(
                 &lines[0].0,
@@ -640,7 +646,7 @@ pub fn paint_minus_and_plus_lines(
         &lines_have_homolog[Plus],
         config,
     );
-    if config.side_by_side {
+    if config.side_by_side_data.is_some() {
         side_by_side::paint_minus_and_plus_lines_side_by_side(
             lines,
             syntax_style_sections,
@@ -905,8 +911,7 @@ fn style_sections_contain_more_than_one_style(sections: &[(Style, &str)]) -> boo
 mod superimpose_style_sections {
     use syntect::highlighting::Style as SyntectStyle;
 
-    use crate::style::Style;
-    use crate::utils::bat::terminal::to_ansi_color;
+    use crate::{style::Style, utils::bat::terminal::to_ansi_color};
 
     // We have two different annotations of the same line:
     // `syntax_style_sections` contains foreground styles computed by syntect,
@@ -1015,9 +1020,9 @@ mod superimpose_style_sections {
 
         use super::*;
         use ansi_term::{self, Color};
-        use syntect::highlighting::Color as SyntectColor;
-        use syntect::highlighting::FontStyle as SyntectFontStyle;
-        use syntect::highlighting::Style as SyntectStyle;
+        use syntect::highlighting::{
+            Color as SyntectColor, FontStyle as SyntectFontStyle, Style as SyntectStyle,
+        };
 
         use crate::style::{DecorationStyle, Style};
 

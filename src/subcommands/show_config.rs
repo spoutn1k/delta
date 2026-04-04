@@ -2,13 +2,14 @@ use std::io::Write;
 
 use itertools::Itertools;
 
-use crate::cli;
-use crate::config;
-use crate::features::side_by_side::{Left, Right};
-use crate::minusplus::*;
-use crate::paint::BgFillMethod;
-use crate::style;
-use crate::utils::bat::output::PagingMode;
+use crate::{
+    cli, config,
+    features::side_by_side::{Left, Right},
+    minusplus::*,
+    paint::BgFillMethod,
+    style,
+    utils::bat::output::PagingMode,
+};
 
 pub fn show_config(config: &config::Config, writer: &mut dyn Write) -> std::io::Result<()> {
     // styles first
@@ -149,7 +150,7 @@ pub fn show_config(config: &config::Config, writer: &mut dyn Write) -> std::io::
             PagingMode::QuitIfOneScreen => "auto",
             PagingMode::Capture => unreachable!("capture can not be set"),
         },
-        side_by_side = config.side_by_side,
+        side_by_side = config.side_by_side_data.is_some(),
         syntax_theme = config
             .syntax_theme
             .clone()

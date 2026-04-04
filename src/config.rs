@@ -1,33 +1,33 @@
-use std::collections::HashMap;
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use clap::parser::ValueSource;
 use regex::Regex;
-use syntect::highlighting::Style as SyntectStyle;
-use syntect::highlighting::Theme as SyntaxTheme;
-use syntect::parsing::SyntaxSet;
+use syntect::{
+    highlighting::{Style as SyntectStyle, Theme as SyntaxTheme},
+    parsing::SyntaxSet,
+};
 
-use crate::ansi;
-use crate::cli;
-use crate::color::{self, ColorMode};
-use crate::delta::State;
-use crate::fatal;
-use crate::features::navigate;
-use crate::features::side_by_side::{self, ansifill, LeftRight};
-use crate::git_config::GitConfig;
-use crate::handlers;
-use crate::handlers::blame::parse_blame_line_numbers;
-use crate::handlers::blame::BlameLineNumbers;
-use crate::minusplus::MinusPlus;
-use crate::paint::BgFillMethod;
-use crate::parse_styles;
-use crate::style;
-use crate::style::Style;
-use crate::tests::TESTING;
-use crate::utils;
-use crate::utils::bat::output::PagingMode;
-use crate::utils::regex_replacement::RegexReplacement;
-use crate::wrapping::WrapConfig;
+use crate::{
+    ansi, cli,
+    color::{self, ColorMode},
+    delta::State,
+    fatal,
+    features::{
+        navigate,
+        side_by_side::{self, LeftRight, ansifill},
+    },
+    git_config::GitConfig,
+    handlers,
+    handlers::blame::{BlameLineNumbers, parse_blame_line_numbers},
+    minusplus::MinusPlus,
+    paint::BgFillMethod,
+    parse_styles, style,
+    style::Style,
+    tests::TESTING,
+    utils,
+    utils::{bat::output::PagingMode, regex_replacement::RegexReplacement},
+    wrapping::WrapConfig,
+};
 
 pub const INLINE_SYMBOL_WIDTH_1: usize = 1;
 
@@ -126,8 +126,7 @@ pub struct Config {
     pub plus_style: Style,
     pub relative_paths: bool,
     pub show_themes: bool,
-    pub side_by_side_data: side_by_side::SideBySideData,
-    pub side_by_side: bool,
+    pub side_by_side_data: Option<side_by_side::SideBySideData>,
     pub syntax_set: SyntaxSet,
     pub syntax_theme: Option<SyntaxTheme>,
     pub tab_cfg: utils::tabs::TabCfg,
@@ -237,15 +236,20 @@ impl From<cli::Opt> for Config {
             _ => fatal("Invalid option for line-fill-method: Expected \"ansi\" or \"spaces\"."),
         };
 
-        let side_by_side_data = side_by_side::SideBySideData::new_sbs(
-            &opt.computed.decorations_width,
-            &opt.computed.available_terminal_width,
-        );
-        let side_by_side_data = ansifill::UseFullPanelWidth::sbs_odd_fix(
-            &opt.computed.decorations_width,
-            &line_fill_method,
-            side_by_side_data,
-        );
+        let side_by_side_data = if opt.side_by_side && !handlers::hunk::is_word_diff() {
+            let side_by_side_data = side_by_side::SideBySideData::new_sbs(
+                &opt.computed.decorations_width,
+                &opt.computed.available_terminal_width,
+            );
+
+            Some(ansifill::UseFullPanelWidth::sbs_odd_fix(
+                &opt.computed.decorations_width,
+                &line_fill_method,
+                side_by_side_data,
+            ))
+        } else {
+            None
+        };
 
         let navigate_regex = if (opt.navigate || opt.show_themes)
             && (opt.navigate_regex.is_none() || opt.navigate_regex == Some("".to_string()))
@@ -401,8 +405,7 @@ impl From<cli::Opt> for Config {
             max_syntax_length: opt.max_syntax_length,
             merge_conflict_begin_symbol: opt.merge_conflict_begin_symbol,
             merge_conflict_ours_diff_header_style: styles["merge-conflict-ours-diff-header-style"],
-            merge_conflict_theirs_diff_header_style: styles
-                ["merge-conflict-theirs-diff-header-style"],
+            merge_conflict_theirs_diff_header_style: styles["merge-conflict-theirs-diff-header-style"],
             merge_conflict_end_symbol: opt.merge_conflict_end_symbol,
             minus_emph_style: styles["minus-emph-style"],
             minus_empty_line_marker_style: styles["minus-empty-line-marker-style"],
@@ -424,7 +427,6 @@ impl From<cli::Opt> for Config {
             git_plus_style: styles["git-plus-style"],
             relative_paths: opt.relative_paths,
             show_themes: opt.show_themes,
-            side_by_side: opt.side_by_side && !handlers::hunk::is_word_diff(),
             side_by_side_data,
             styles_map,
             syntax_set: opt.computed.syntax_set,
@@ -475,9 +477,7 @@ pub const HEADER_LEN: usize = 7;
 
 #[cfg(test)]
 pub mod tests {
-    use crate::cli;
-    use crate::tests::integration_test_utils;
-    use crate::utils::bat::output::PagingMode;
+    use crate::{cli, tests::integration_test_utils, utils::bat::output::PagingMode};
     use std::fs::remove_file;
 
     #[test]
