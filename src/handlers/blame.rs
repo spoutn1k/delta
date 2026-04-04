@@ -61,6 +61,7 @@ impl StateMachine<'_> {
                     &BLAME_PLACEHOLDER_REGEX,
                     false,
                 );
+
                 let mut formatted_blame_metadata =
                     format_blame_metadata(&format_data, &blame, self.config);
                 let key = formatted_blame_metadata.clone();
@@ -69,6 +70,7 @@ impl StateMachine<'_> {
                     formatted_blame_metadata =
                         " ".repeat(measure_text_width(&formatted_blame_metadata))
                 };
+
                 let metadata_style =
                     self.blame_metadata_style(&key, previous_key.as_deref(), is_repeat)?;
                 let code_style = self.config.blame_code_style.unwrap_or(metadata_style);
@@ -92,6 +94,7 @@ impl StateMachine<'_> {
                     self.painter.set_syntax(self.get_filename().as_deref())?;
                     self.painter.set_highlighter();
                 }
+
                 self.state = State::Blame(key);
                 self.painter.syntax_highlight_and_paint_line(
                     &format!("{}\n", blame.code),
@@ -99,6 +102,7 @@ impl StateMachine<'_> {
                     self.state.clone(),
                     BgShouldFill::default(),
                 );
+
                 handled_line = true
             }
         }

@@ -20,6 +20,20 @@ pub struct GitConfig {
     path: std::path::PathBuf,
 }
 
+impl std::fmt::Debug for GitConfig {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let redacted = "redacted".to_owned();
+        f.debug_struct("GitConfig")
+            .field("config", &redacted)
+            .field("config_from_env_var", &self.config_from_env_var)
+            .field("enabled", &self.enabled)
+            .field("repo", &redacted)
+            .field("remote_url", &self.remote_url)
+            .field("path", &redacted)
+            .finish()
+    }
+}
+
 #[cfg(test)]
 impl Clone for GitConfig {
     fn clone(&self) -> Self {

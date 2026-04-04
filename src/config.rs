@@ -1,5 +1,6 @@
 use crate::{
-    ansi, cli,
+    ansi,
+    cli::{self, ComputedValues},
     color::{self, ColorMode},
     delta::State,
     errors::{Error, Result},
@@ -34,6 +35,7 @@ pub const INLINE_SYMBOL_WIDTH_1: usize = 1;
 pub const SYNTAX_FALLBACK_LANG: &str = "txt";
 
 #[cfg_attr(test, derive(Clone))]
+#[derive(Debug)]
 pub struct Config {
     pub available_terminal_width: usize,
     pub background_color_extends_to_terminal_width: bool,
@@ -143,19 +145,19 @@ pub enum GrepType {
     Classic,
 }
 
-#[cfg_attr(test, derive(Clone))]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum HunkHeaderIncludeFilePath {
     Yes,
     No,
 }
 
-#[cfg_attr(test, derive(Clone))]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum HunkHeaderIncludeLineNumber {
     Yes,
     No,
 }
 
-#[cfg_attr(test, derive(Clone))]
+#[derive(Debug, Eq, PartialEq, Clone)]
 pub enum HunkHeaderIncludeCodeFragment {
     Yes,
     YesNoSpace,
@@ -179,6 +181,19 @@ impl Config {
 
     pub fn git_config(&self) -> Option<&GitConfig> {
         self.git_config.as_ref()
+    }
+
+    pub fn override_width(&mut self, computed: ComputedValues) {
+        let temp = side_by_side::SideBySideData::new_sbs(
+            &computed.decorations_width,
+            &computed.available_terminal_width,
+        );
+
+        self.side_by_side_data = ansifill::UseFullPanelWidth::sbs_odd_fix(
+            &computed.decorations_width,
+            &BgFillMethod::Spaces,
+            temp,
+        );
     }
 }
 
